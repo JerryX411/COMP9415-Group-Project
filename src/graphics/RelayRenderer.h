@@ -12,6 +12,10 @@ struct RenderOptions {
   bool collisionOverlay = false;
   int motionPreview = 0;
   float wakeTime = -1;
+  glm::vec2 menuLook{0};  // Cursor in [-1, 1]; the menu courier watches it.
+  // A free view (the map editor's 3D preview): perspective from viewEye toward viewTarget.
+  bool customView = false;
+  glm::vec3 viewEye{0}, viewTarget{0};
 };
 struct RenderStats {
   int voxels = 0, totalFaces = 0, visibleFaces = 0;
@@ -30,6 +34,11 @@ class Renderer {
   const RenderStats& stats() const { return stats_; }
  private:
   void rebuildTerrain(const Game& game, bool optimised, bool whitebox);
+  // Effects light the scene: flashes, fireballs, arcs, pillars, cores and live traps.
+  void gatherLights(const Game& game);
+  static constexpr int maxLights = 12;
+  std::array<glm::vec4,maxLights> lightPosition_{}, lightColour_{};
+  int lightCount_ = 0;
   craft::graphics::Shader shader_;
   SceneModels models_;
   std::vector<Instance> instances_;
@@ -38,10 +47,14 @@ class Renderer {
   unsigned albedo_ = 0, normal_ = 0;
   int terrainVertices_ = 0, revision_ = -1;
   int modelVertices_ = 0;
-  std::array<int,3> meshStart_{}, meshCount_{}, instanceStart_{}, instanceCount_{};
+  // Instance groups are ordered by blend mode, then primitive.
+  static constexpr int primitives = 5, groups = 3 * primitives;
+  std::array<int,primitives> meshStart_{}, meshCount_{};
+  std::array<int,groups> instanceStart_{}, instanceCount_{};
   glm::vec3 playerPosition_{};
   const Game* sceneGame_ = nullptr;
   bool lastOptimised_ = false, lastWhitebox_ = false;
+  float menuTime_ = 0;
   glm::mat4 viewProjection_{1};
   RenderStats stats_;
 };

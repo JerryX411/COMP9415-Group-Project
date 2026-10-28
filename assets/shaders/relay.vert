@@ -10,6 +10,7 @@ layout(location=10) in vec4 iMaterial;
 uniform mat4 uViewProjection;
 out vec3 vPosition, vNormal, vTangent, vColour;
 out vec2 vUv;
+out float vAlpha;
 flat out vec4 vMaterial;
 void main() {
   vec4 world=iModel*vec4(aPosition,1.0);
@@ -17,6 +18,7 @@ void main() {
   vNormal=normalize(transpose(inverse(mat3(iModel)))*aNormal);
   vTangent=normalize(mat3(iModel)*aTangent);
   vColour=aColour*iColour.rgb;
+  vAlpha=iColour.a;
   vUv=aUv*iMaterial.w;
   vMaterial=iMaterial;
   gl_Position=uViewProjection*world;

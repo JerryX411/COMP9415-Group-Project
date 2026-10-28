@@ -2,6 +2,8 @@
 
 #include "app/SceneBenchmark.h"
 #include "graphics/RelayRenderer.h"
+#include "imgui.h"
+#include <vector>
 
 namespace craft::graphics {
 class Window;
@@ -25,11 +27,28 @@ class AppUi {
                           relay::RenderOptions& options, const relay::Renderer& renderer,
                           bool focused);
   void render();
+  // Level the UI asked to load (restart or switch), or -1; reading clears it.
+  int takeLevelRequest() { const int level=levelRequest_; levelRequest_=-1; return level; }
+  // Training field-manual popup (armour, reboots, lives). While open the game holds and the
+  // cursor is free; Esc, the X or the last page's button closes it.
+  bool popupOpen() const { return popupPage_>=0; }
+  void openPopup(int page) { popupPage_=page; popupShown_=true; popupOpenedAt_=-10; }
 
 
  private:
   [[nodiscard]] bool drawBenchmarkSection(
       const BenchmarkSnapshot& benchmark) const;
+  int levelRequest_ = -1;
+  float prewarmedScale_ = 0;
+  // Training field manual: the page on screen (-1 closed), whether it has been shown, and when.
+  int popupPage_ = -1;
+  bool popupShown_ = false;
+  float popupOpenedAt_ = 0;
+  // Sparks shed by the boost meter (screen space).
+  struct HudSpark { ImVec2 p, v; float age, life, size; };
+  std::vector<HudSpark> hudSparks_;
+  float sparkClock_ = 0;
+  unsigned sparkSeed_ = 12345u;
 
 };
 

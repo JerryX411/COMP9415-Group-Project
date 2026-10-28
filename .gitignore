@@ -6,3 +6,8 @@ ignore/
 imgui.ini
 .DS_Store
 _deps/
+
+# Local-only standalone map editor (not part of the game submission).
+/src/editor/
+RelayEditor.exe
+/voxel_relay_keys.ini

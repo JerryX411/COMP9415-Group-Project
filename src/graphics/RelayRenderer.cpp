@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <string>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace relay {
@@ -77,9 +78,8 @@ std::vector<Vertex> bevelledBox() {
     triangle({x*b,y*a,z*a},{x*a,y*b,z*a},{x*a,y*a,z*b},glm::normalize(glm::vec3(x,y,z)));
   return result;
 }
-std::vector<Vertex> roundPrimitive(bool cylinder) {
+std::vector<Vertex> roundPrimitive(bool cylinder,int slices=24,int stacks=14) {
   std::vector<Vertex> v;
-  constexpr int slices=24, stacks=14;
   constexpr float pi=3.14159265F;
   auto emit=[&](glm::vec3 p,glm::vec3 n,glm::vec2 uv) {
     auto t=glm::vec3(-std::sin(uv.x*2*pi),0,std::cos(uv.x*2*pi));
@@ -117,6 +117,10 @@ Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), cra
   auto cube=bevelledBox();
   meshStart_[0]=0; meshCount_[0]=int(cube.size());
   for(int i=1;i<3;++i) { auto mesh=roundPrimitive(i==2); meshStart_[i]=int(cube.size()); meshCount_[i]=int(mesh.size()); cube.insert(cube.end(),mesh.begin(),mesh.end()); }
+  std::vector<Vertex> flat; for(auto n:directions) face(flat,glm::vec3(0),glm::vec3(n),{1,1,1});
+  meshStart_[3]=int(cube.size()); meshCount_[3]=int(flat.size()); cube.insert(cube.end(),flat.begin(),flat.end());
+  auto blob=roundPrimitive(false,10,6);  // 120 triangles instead of 672.
+  meshStart_[4]=int(cube.size()); meshCount_[4]=int(blob.size()); cube.insert(cube.end(),blob.begin(),blob.end());
   modelVertices_=int(cube.size());
   glBindBuffer(GL_ARRAY_BUFFER,cubeBuffer_);
   glBufferData(GL_ARRAY_BUFFER,GLsizeiptr(cube.size()*sizeof(Vertex)),cube.data(),GL_STATIC_DRAW);
@@ -169,34 +173,53 @@ void Renderer::rebuildTerrain(const Game& game, bool optimised, bool whitebox) {
   glBufferData(GL_ARRAY_BUFFER,GLsizeiptr(vertices.size()*sizeof(Vertex)),vertices.data(),GL_STATIC_DRAW);
 }
 void Renderer::prepare(const Game& game, const RenderOptions& options, float galleryTime) {
-  sceneGame_=&game;
+  sceneGame_=&game; menuTime_=galleryTime;
   if(revision_!=game.revision() || lastOptimised_!=options.optimised || lastWhitebox_!=options.whitebox) {
     rebuildTerrain(game,options.optimised,options.whitebox);
     revision_=game.revision(); lastOptimised_=options.optimised; lastWhitebox_=options.whitebox;
   }
   instances_.clear();
-  if(options.menu) models_.appendMenu(galleryTime,instances_);
+  if(options.menu) models_.appendMenu(galleryTime,instances_,options.menuLook);
   else if(options.gallery) models_.appendGallery(galleryTime,instances_,options.motionPreview);
   else models_.append(game,instances_,options.wakeTime);
   playerPosition_=game.player().position;
-  std::stable_sort(instances_.begin(),instances_.end(),[](const auto& a,const auto& b) { return int(a.primitive)<int(b.primitive); });
-  instanceCount_.fill(0); for(const auto& i:instances_) ++instanceCount_[int(i.primitive)];
-  instanceStart_[0]=0; for(int i=1;i<3;++i) instanceStart_[i]=instanceStart_[i-1]+instanceCount_[i-1];
+  lightCount_=0; if(!options.menu&&!options.gallery) gatherLights(game);
+  const auto group=[](const Instance& i) { return int(i.blend)*primitives+int(i.primitive); };
+  std::stable_sort(instances_.begin(),instances_.end(),[&](const auto& a,const auto& b) { return group(a)<group(b); });
+  instanceCount_.fill(0); for(const auto& i:instances_) ++instanceCount_[std::size_t(group(i))];
+  instanceStart_[0]=0; for(int i=1;i<groups;++i) instanceStart_[i]=instanceStart_[i-1]+instanceCount_[i-1];
   glBindBuffer(GL_ARRAY_BUFFER,instanceBuffer_);
   glBufferData(GL_ARRAY_BUFFER,GLsizeiptr(instances_.size()*sizeof(Instance)),instances_.data(),GL_STREAM_DRAW);
   stats_.instances=int(instances_.size());
   stats_.submittedTriangles=options.gallery||options.menu?0:terrainVertices_/3;
   stats_.drawCalls=options.gallery||options.menu?0:1;
-  for(int i=0;i<3;++i) if(instanceCount_[i]) { stats_.submittedTriangles+=instanceCount_[i]*meshCount_[i]/3; ++stats_.drawCalls; }
+  for(int i=0;i<groups;++i) if(instanceCount_[i]) { stats_.submittedTriangles+=instanceCount_[i]*meshCount_[i%primitives]/3; ++stats_.drawCalls; }
 }
 void Renderer::draw(int width, int height, const RenderOptions& options, const FollowCamera& camera) {
   const float aspect=float(width)/float(height);
   glm::vec3 eye=camera.eye();
-  if(options.menu||options.gallery||options.overview) {
-    const glm::vec3 target=options.menu?glm::vec3(-1.3F,1.35F,0):options.gallery?glm::vec3(0,options.motionPreview==9?4.F:1.6F,0):glm::vec3(16,0,16);
-    eye=target+(options.menu?glm::vec3(2.2F,2.3F,10):options.gallery?glm::vec3(3,2.3F,8):glm::vec3(24,30,28));
-    const float halfHeight=options.menu?3.9F:options.gallery?std::max(options.motionPreview==9?5.6F:2.75F,3.3F/aspect):std::max(17.6F,21.7F/aspect);
-    viewProjection_=glm::ortho(-halfHeight*aspect,halfHeight*aspect,-halfHeight,halfHeight,.1F,150.F)*glm::lookAt(eye,target,{0,1,0});
+  glm::vec3 fog(.28F,.34F,.38F); float fogDensity=.006F;
+  if(options.customView) {
+    eye=options.viewEye;
+    viewProjection_=glm::perspective(glm::radians(50.F),aspect,.1F,300.F)*glm::lookAt(eye,options.viewTarget,{0,1,0});
+    fogDensity=.003F;
+  } else if(options.menu) {
+    // A slow, low dolly keeps the chamber alive; the courier sits on the right third.
+    const float t=menuTime_;
+    const glm::vec3 target(1.05F+.10F*std::sin(t*.11F),1.55F,.4F);
+    eye=target+glm::vec3(-3.4F+.35F*std::sin(t*.07F),.55F+.12F*std::sin(t*.09F),10.6F);
+    // Keep the courier's screen position stable across window shapes.
+    const float fov=glm::radians(aspect<1.45F?44.F:36.F);
+    viewProjection_=glm::perspective(fov,aspect,.1F,120.F)*glm::lookAt(eye,target,{0,1,0});
+    fog={.88F,.90F,.91F}; fogDensity=.022F;
+  } else if(options.gallery||options.overview) {
+    // The overview frames the whole room (the training ground is about twice a mission's size).
+    const Bounds room=sceneGame_?sceneGame_->room():Bounds{{4,1,4},{28,4,28}};
+    const float k=std::max(room.max.x-room.min.x,room.max.z-room.min.z)/24.F;
+    const glm::vec3 target=options.gallery?glm::vec3(0,options.motionPreview==9?4.F:1.6F,0):glm::vec3((room.min.x+room.max.x)*.5F,0,(room.min.z+room.max.z)*.5F);
+    eye=target+(options.gallery?glm::vec3(3,2.3F,8):glm::vec3(24,30,28)*k);
+    const float halfHeight=options.gallery?std::max(options.motionPreview==9?5.6F:2.75F,3.3F/aspect):std::max(17.6F,21.7F/aspect)*k;
+    viewProjection_=glm::ortho(-halfHeight*aspect,halfHeight*aspect,-halfHeight,halfHeight,.1F,300.F)*glm::lookAt(eye,target,{0,1,0});
   } else if(options.wakeTime>=0) {
     const float t=options.wakeTime;
     auto ease=[](float x) { x=std::clamp(x,0.F,1.F); return x*x*(3-2*x); };
@@ -216,21 +239,60 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
     }
     viewProjection_=glm::perspective(glm::radians(58.F),aspect,.06F,100.F)*glm::lookAt(eye,target,{0,1,0});
   } else {
-    viewProjection_=glm::perspective(glm::radians(58.F),aspect,.06F,100.F)*glm::lookAt(eye,camera.target(),{0,1,0});
+    viewProjection_=glm::perspective(glm::radians(camera.fov()),aspect,.06F,100.F)*glm::lookAt(eye,camera.target(),camera.up());
   }
-  glViewport(0,0,width,height); glClearColor(.22F,.27F,.30F,1);
+  glViewport(0,0,width,height);
+  if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.22F,.27F,.30F,1);
   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
   glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDisable(GL_BLEND);
   shader_.use(); shader_.setMat4("uViewProjection",viewProjection_); shader_.setVec3("uEye",eye);
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);
+  shader_.setVec3("uFogColour",fog); shader_.setFloat("uFogDensity",fogDensity);
+  // The camera may pass the map edge (see FollowCamera): cut away the boundary wall it is behind.
+  const bool cutaway=!options.gallery&&!options.menu&&sceneGame_;
+  shader_.setInt("uCutaway",cutaway?1:0);
+  if(cutaway) { const Bounds room=sceneGame_->room(); shader_.setVec4("uRoom",glm::vec4(room.min.x,room.min.z,room.max.x,room.max.z)); }
+  shader_.setInt("uLightCount",lightCount_);
+  for(int i=0;i<lightCount_;++i) {
+    const std::string index="["+std::to_string(i)+"]";
+    shader_.setVec4("uLightPosition"+index,lightPosition_[std::size_t(i)]); shader_.setVec4("uLightColour"+index,lightColour_[std::size_t(i)]);
+  }
   glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,albedo_);
   glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D,normal_);
   if(!options.gallery&&!options.menu) { glBindVertexArray(terrainVao_); glDrawArraysInstanced(GL_TRIANGLES,0,terrainVertices_,1); }
-  for(int i=0;i<3;++i) if(instanceCount_[i]) {
+  for(int i=0;i<groups;++i) if(instanceCount_[i]) {
+    // Soft effects test against the scene but never hide each other.
+    const auto blend=Blend(i/primitives);
+    if(blend!=Blend::Opaque) { glEnable(GL_BLEND); glDepthMask(GL_FALSE); glBlendFunc(GL_SRC_ALPHA,blend==Blend::Additive?GL_ONE:GL_ONE_MINUS_SRC_ALPHA); }
     meshAttributes(cubeVao_,cubeBuffer_,instanceBuffer_,std::size_t(instanceStart_[i])*sizeof(Instance));
-    glBindVertexArray(cubeVao_); glDrawArraysInstanced(GL_TRIANGLES,meshStart_[i],meshCount_[i],instanceCount_[i]);
+    glBindVertexArray(cubeVao_); glDrawArraysInstanced(GL_TRIANGLES,meshStart_[i%primitives],meshCount_[i%primitives],instanceCount_[i]);
   }
+  glDepthMask(GL_TRUE); glDisable(GL_BLEND);
   glBindVertexArray(0); glActiveTexture(GL_TEXTURE0);
+}
+void Renderer::gatherLights(const Game& game) {
+  // Candidate lights carry (position, radius) and (colour, intensity); the strongest are kept.
+  struct Light { glm::vec4 position, colour; float weight; };
+  std::vector<Light> lights;
+  const auto add=[&](glm::vec3 p,float radius,glm::vec3 colour,float intensity) { if(intensity>.03F) lights.push_back({{p,radius},{colour,intensity},intensity*radius}); };
+  for(const auto& p:game.particles()) if(p.remaining>0) {
+    const float life=p.remaining/p.lifetime,age=p.lifetime-p.remaining;
+    if(p.kind==ParticleKind::Glow&&p.size>=.3F) add(p.position,1.5F+p.size*3.5F,p.colour,2.2F*life);
+    if(p.kind==ParticleKind::Fireball) add(p.position,2.5F+p.size*(1+p.growth*std::sqrt(age))*2.F,p.colour,2.6F*life);
+    if(p.kind==ParticleKind::Arc) add(p.position+p.extent*.5F,2.4F,p.colour,1.8F*life);
+    if(p.kind==ParticleKind::Pillar) add(p.position+glm::vec3(0,1.2F,0),4.5F,p.colour,2.4F*life);
+    if(p.kind==ParticleKind::Shell) add(p.position,2.F+p.growth*1.5F,p.colour,3.2F*life*life);
+  }
+  for(const auto& core:game.cores()) if(!core.collected) add(core.position,2.6F,{.35F,1,.88F},.55F+.15F*std::sin(game.elapsed()*3.1F));
+  for(std::size_t i=0;i<game.traps().size();++i) if(game.trapPhase(i)==TrapPhase::Active) add((game.traps()[i].area.min+game.traps()[i].area.max)*.5F+glm::vec3(0,.35F,0),3.4F,{1,.35F,.15F},.9F);
+  if(game.gateUnlocked()) add(game.gatePosition()+glm::vec3(0,1.5F,-.6F),3.5F,{.35F,1,.88F},.6F);
+  for(const auto& checkpoint:game.checkpoints()) add(checkpoint.position+glm::vec3(0,1.2F,0),checkpoint.active?3.F:1.8F,checkpoint.active?glm::vec3(.35F,1,.9F):glm::vec3(1,.6F,.15F),checkpoint.active?.7F:.25F);
+  for(const auto& pad:game.speedPads()) if(pad.flash>.05F) add((pad.area.min+pad.area.max)*.5F+glm::vec3(0,.4F,0),3.5F,{.45F,.85F,1},1.6F*pad.flash);
+  for(const auto& item:game.pickups()) if(item.respawn<=0&&!item.taken) add(item.position+glm::vec3(0,.9F,0),2.2F,pickupColour(item.kind),.5F);
+  for(const auto& door:game.doors()) add(door.centre+glm::vec3(0,.8F,0),2.4F,door.hold>0?glm::vec3(.35F,1,.9F):glm::vec3(1,.3F,.15F),.35F);
+  std::sort(lights.begin(),lights.end(),[](const Light& a,const Light& b) { return a.weight>b.weight; });
+  lightCount_=std::min<int>(maxLights,int(lights.size()));
+  for(int i=0;i<lightCount_;++i) { lightPosition_[std::size_t(i)]=lights[std::size_t(i)].position; lightColour_[std::size_t(i)]=lights[std::size_t(i)].colour; }
 }
 glm::vec2 Renderer::project(glm::vec3 point,float width,float height) const {
   auto p=viewProjection_*glm::vec4(point,1);

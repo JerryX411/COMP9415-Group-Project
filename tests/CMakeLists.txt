@@ -1,7 +1,7 @@
 # Game regressions are independent of OpenGL contexts and external test downloads.
 add_executable(relay_tests relay_tests.cpp)
 target_link_libraries(relay_tests PRIVATE craft_core)
-foreach(case movement jump low_barrier wall trap_air damage_cooldown switch pickup gate timeout reset particles hierarchy movers routes camera sprint death knockback sensitivity model_bounds input_focus control_feel jump_buffer coyote frame_rates trap_edges rounded_collision mover_parts pose_transitions expressive_bounds animation_events foot_plant turn_body weighted_impact arrival)
+foreach(case movement jump low_barrier wall trap_air damage_cooldown switch pickup gate timeout reset particles hierarchy movers routes camera sprint death knockback sensitivity model_bounds input_focus control_feel jump_buffer coyote frame_rates trap_edges rounded_collision mover_parts pose_transitions expressive_bounds animation_events foot_plant turn_body weighted_impact arrival crouch crouch_toggle crouch_tunnel level_transition checkpoint checkpoint_solid_return timeout_no_respawn key_bindings hit_sources slide lives slide_cancel speed_pad pressure_door wall_bounce wall_jump slide_tricks training training_reboots pad_modes tunnel_camera powerups wall_camera camera_steady time_pickup camera_edge level_files)
     add_test(NAME relay_${case} COMMAND relay_tests ${case})
 endforeach()
 if(WIN32)
