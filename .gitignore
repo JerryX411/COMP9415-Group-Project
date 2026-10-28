@@ -1,0 +1,8 @@
+build/
+.vscode
+.idea
+cmake-build-debug/
+ignore/
+imgui.ini
+.DS_Store
+_deps/
