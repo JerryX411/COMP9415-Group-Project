@@ -72,6 +72,17 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
+# miniaudio: sound playback (one file; public domain or MIT No Attribution). Only its source is
+# needed (SOURCE_SUBDIR skips its own CMake project); Ogg Vorbis decoding comes from stb_vorbis.
+FetchContent_Declare(
+    miniaudio
+    GIT_REPOSITORY https://github.com/mackron/miniaudio.git
+    GIT_TAG 0.11.25
+    GIT_SHALLOW TRUE
+    SOURCE_SUBDIR do-not-build
+)
+FetchContent_MakeAvailable(miniaudio)
+
 add_library(stb_headers INTERFACE)
 add_library(stb::headers ALIAS stb_headers)
 target_include_directories(stb_headers SYSTEM INTERFACE

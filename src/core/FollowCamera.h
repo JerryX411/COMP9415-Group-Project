@@ -24,7 +24,7 @@ class FollowCamera {
   glm::vec3 eye_{},target_{};
   float yaw_=.4F,pitch_=.52F,distance_=8.F,actualDistance_=8.F;
   // Trauma rises on hits, pickups, heavy landings and shutdown, then decays; shake is its square.
-  float trauma_=0,shakeClock_=0,lastHurt_=0,lastLandAge_=10,lastCelebrate_=10,lastStepAge_=10,lastLaunchAge_=10,lastSlap_=10,lastHitAge_=10,lastSlideAge_=10,lastPopAge_=10,lastBoostAge_=10,lastBounceAge_=10,lastTakeoffAge_=10,roll_=0;
+  float trauma_=0,shakeClock_=0,lastHurt_=0,lastLandAge_=10,lastCelebrate_=10,lastStepAge_=10,lastLaunchAge_=10,lastSlap_=10,lastHitAge_=10,lastSlideAge_=10,lastPopAge_=10,lastBoostAge_=10,lastBounceAge_=10,lastTakeoffAge_=10,lastTrickAge_=10,lastShieldBreak_=10,lastJetAge_=10,lastPushAge_=10,roll_=0;
   bool wasLost_=false;
   // Tunnel shot weight (0 normal view, 1 lowest shot behind the courier).
   float tunnel_=0;

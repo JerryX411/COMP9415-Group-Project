@@ -11,3 +11,7 @@ _deps/
 /src/editor/
 RelayEditor.exe
 /voxel_relay_keys.ini
+/assets/sounds/local-apex/
+
+# Local audio extraction cache.
+/rsx_cache_db.bin

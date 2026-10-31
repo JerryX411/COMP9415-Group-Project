@@ -34,13 +34,20 @@ struct CourierMotion {
   float takeoffAge=10, touchAge=10;
   // Slide surge, 1 at its start fading to 0: a boosted slide or a pad-boosted turbo slide.
   float surge=0;
-  // Power-ups: time since one was picked up, and since a shield burst absorbing a hit.
-  float pickupAge=10, shieldBreakAge=10;
+  // Power-ups: time since one was picked up (and which: PowerUp order), and since a shield burst
+  // absorbing a hit. hackAge: time since a crimson tile bit (the red-black corruption glitch).
+  float pickupAge=10, shieldBreakAge=10, hackAge=10;
+  int pickupKind=0;
+  // Time since a jetpack burst fired (flames from the pack), and since a portal carried the
+  // courier (the arrival pop, the HUD flash). pushAge: since a walking courier shoved off a wall.
+  float jetAge=10, teleportAge=10, pushAge=10;
   // Tricks between moves: 1 a barrel roll (flight into slide), 2 a front flip (slide into
   // flight, boosted jumps), 3 a spin (run or stride into flight), 4 a kip-up (slide into a run),
   // 5 a spinning kip-up (the same, boosted), 6 a scissor-kick twist (jump out of a slide), 7 a
-  // corkscrew (boosted jump out of a slide), 8 a wall kick (boosted wall jump); trickAge is the
-  // time since it began.
+  // corkscrew (boosted jump out of a slide), 8 a wall kick (boosted wall jump, and the wall action
+  // in the air), 9 a running wall flip (wall action at a sprint: a laid-out back flip), 10 a low
+  // aerial off the wall (wall action mid-slide), 11 a flip turn (wall action in flight); trickAge
+  // is the time since it began.
   int trickKind=0;
   float trickAge=10;
   // Menu and workshop only: head pitch toward a point of interest, greeting weight.

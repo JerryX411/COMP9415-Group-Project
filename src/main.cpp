@@ -12,6 +12,7 @@
 #include <vector>
 #include "imgui.h"
 #include "app/AppUi.h"
+#include "app/Audio.h"
 #include "app/RelayMenu.h"
 #include "app/SceneBenchmark.h"
 #include "core/FollowCamera.h"
@@ -51,10 +52,20 @@ int main(int argc,char** argv) {
       else if(arg=="--intro") { title=false; startArrival=true; }
       else if(arg=="--level2") level=1;
       else if(arg=="--training") level=relay::Game::tutorialLevel;
+      else if(arg=="--practice") level=relay::Game::practiceLevel;
       else if(arg=="--manual"&&i+1<argc) manualPage=std::stoi(argv[++i]);
       else if(arg=="--tools") options.diagnostics=true;
       else if(arg=="--colliders") options.collisionOverlay=true;
       else if(arg=="--input-self-test") inputSelfTest=true;
+      else if(arg=="--audio-demo"&&i+1<argc) {
+        craft::app::Audio offline(true); return offline.renderDemo(argv[++i]) ? 0 : 1;
+      }
+      else if(arg=="--audio-check") {
+        // Open the sound device, load every effect, play one and report (then exit).
+        craft::app::Audio check; std::cout<<"audio ready="<<check.ready()<<" sounds="<<check.loadedSounds()<<"/"<<craft::app::Audio::soundKinds()<<std::endl;
+        check.menuConfirm(); glfwInit(); const double until=glfwGetTime()+.6; while(glfwGetTime()<until) {}
+        return check.ready()&&check.loadedSounds()==craft::app::Audio::soundKinds()?0:1;
+      }
       else if(arg=="--frames"&&i+1<argc) frameLimit=std::stoi(argv[++i]);
       else if(arg=="--capture"&&i+1<argc) capture=argv[++i];
       else if(arg=="--record"&&i+1<argc) record=argv[++i];
@@ -107,6 +118,10 @@ int main(int argc,char** argv) {
     if(scene=="shield") game.warpPlayer({12.5F,1,11.8F});
     if(scene=="spring") game.warpPlayer(game.pickups()[1].position);
     if(scene=="edge") game.warpPlayer({27.6F,1,16});
+    if(scene=="crimson") game.warpPlayer({22.5F,1,26.5F});
+    // Training lessons: the clock behind its crimson strip (hall 2), and the wall jump (hall 3).
+    if(scene=="lesson-clock") { game.reset(relay::Game::tutorialLevel); game.warpPlayer({26.5F,1,24}); }
+    if(scene=="lesson-wall") { game.reset(relay::Game::tutorialLevel); game.warpPlayer({44.5F,1,10.25F}); }
     if(scene=="clock") game.warpPlayer(game.pickups()[2].position+glm::vec3(-3.F,0,0));
     // Capture-only: sprint onto the open training-hall pad, camera behind.
     if(scene=="launch") { game.reset(relay::Game::tutorialLevel); game.warpPlayer({16.6F,1,9.75F}); }
@@ -128,6 +143,20 @@ int main(int argc,char** argv) {
       }
     }
     if(scene=="hurt") { for(int i=0;i<5;++i) game.update(.82F,{}); game.warpPlayer({17,1,13}); }
+    // Shield break: take the courtyard shield, then the same hit as "hurt" (the shield absorbs it).
+    // Jetpack burst across hall 3's long trap; the portal pair (linked) at both ends; the upper floor.
+    if(scene=="jet") { game.reset(relay::Game::tutorialLevel); game.warpPlayer({30.5F,1,9.75F}); }
+    // Practice field: the power-up row from the spawn, and a sprint up the runway.
+    if(scene=="items") game.reset(relay::Game::practiceLevel);
+    // Wall action, on the practice field's west wall (x 4) and at the north end of the runway.
+    if(scene=="wall-run"||scene=="wall-slide"||scene=="wall-air") { game.reset(relay::Game::practiceLevel); game.warpPlayer({scene=="wall-air"?7.5F:13.F,1,30}); }
+    if(scene=="wall-push") { game.reset(relay::Game::practiceLevel); game.warpPlayer({6.5F,1,30}); }
+    if(scene=="wall-fly") { game.reset(relay::Game::practiceLevel); game.warpPlayer({47.5F,1,21}); }
+    if(scene=="runway") { game.reset(relay::Game::practiceLevel); game.warpPlayer({47.5F,1,55}); }
+    if(scene=="portal") { game.reset(relay::Game::tutorialLevel); game.linkPortalsForDebug(); game.warpPlayer({55.6F,3,7.6F}); }
+    if(scene=="portal-exit") { game.reset(relay::Game::tutorialLevel); game.linkPortalsForDebug(); game.warpPlayer({57.5F,3,7.6F}); }
+    if(scene=="terrace") { game.reset(relay::Game::tutorialLevel); game.warpPlayer({50.F,1,13.F}); }
+    if(scene=="shieldbreak") { game.warpPlayer({12.5F,1,13.4F}); for(int i=0;i<5;++i) game.update(.82F,{}); game.warpPlayer({17,1,13}); }
     if(scene=="exit") {
       const auto cores=game.cores();
       for(const auto& c:cores) { game.warpPlayer({c.position.x,1,c.position.z}); game.update(.5F,{{0,0},false,true}); }
@@ -147,6 +176,11 @@ int main(int argc,char** argv) {
     relay::LevelTransition transition; if(switchLevel) transition.start(1-game.level());
     bool captured=false,cursorFree=false,settingsFromPause=forcePause,savedOverview=options.overview;
     if(forceSettings) screen=Screen::Settings;
+    // Sound only in interactive runs (captures and self-tests stay silent; CRAFT_MUTE=1 mutes).
+    std::unique_ptr<craft::app::Audio> audio;
+    if(frameLimit<=0&&!inputSelfTest&&!std::getenv("CRAFT_MUTE")) audio=std::make_unique<craft::app::Audio>();
+    int heardMenu=-1,heardSettings=-1;
+    bool leftHeld=true;  // a click that focused the window or left a menu is not a wall action
     std::cout<<"renderer="<<glGetString(GL_RENDERER)<<" OpenGL="<<glGetString(GL_VERSION)<<'\n';
     while(!window.shouldClose()) {
       keys.prepare(ImGui::GetIO().WantTextInput);
@@ -204,7 +238,10 @@ int main(int argc,char** argv) {
         input.sprintHeld=keys.held(bindings[KeyAction::Sprint]);
         input.crouchPressed=keys.pressed(bindings[KeyAction::Crouch]);
         input.sprintPressed=keys.pressed(bindings[KeyAction::Sprint]);
-      }
+        // The wall action is the left mouse button (an edge, like the keys).
+        const bool left=glfwGetMouseButton(native,GLFW_MOUSE_BUTTON_LEFT)==GLFW_PRESS;
+        input.wallPressed=left&&!leftHeld; leftHeld=left;
+      } else leftHeld=glfwGetMouseButton(native,GLFW_MOUSE_BUTTON_LEFT)==GLFW_PRESS;
       if(frameLimit>0) {
         if(scene=="switch") input.interactPressed=frame==2;
         if(scene=="pickup"||scene=="checkpoint") input.interactPressed=frame==2;
@@ -219,6 +256,17 @@ int main(int argc,char** argv) {
         if(scene=="walljump") { input.movement={1,0}; input.sprintHeld=true; input.jumpPressed=input.jumpHeld=game.wallTouching(); }
         // Walk onto the north-lane speed pad.
         if(scene=="boost") input.movement={1,0};
+        if(scene=="jet") { input.movement={1,0}; input.sprintHeld=true; input.sprintPressed=frame==25||frame==28; }
+        if(scene=="runway") { input.movement={0,-1}; input.sprintHeld=true; }
+        {
+          const auto& p=game.player();
+          if(scene=="wall-run"||scene=="wall-slide") { input.movement={-1,0}; input.sprintHeld=true; input.crouchPressed=scene=="wall-slide"&&frame==30; input.wallPressed=p.position.x<5.15F&&game.wallJumpsDone()==0; }
+          if(scene=="wall-air") { input.movement={-1,0}; input.jumpPressed=frame==4; input.jumpHeld=frame<40; input.wallPressed=!p.grounded&&p.position.x<5.15F&&game.wallJumpsDone()==0; }
+          if(scene=="wall-push") { input.movement=game.player().motion.pushAge>1?glm::vec2(-.6F,0):glm::vec2(0); input.wallPressed=p.position.x<4.9F&&p.motion.pushAge>1; }
+          if(scene=="wall-fly") { input.movement={0,-1}; input.sprintHeld=true; input.wallPressed=p.boost==relay::Boost::Flight&&p.position.z<5.4F&&game.wallJumpsDone()==0; }
+        }
+        if(scene=="portal") input.movement=frame<40?glm::vec2(1,0):glm::vec2(0);
+        if(scene=="terrace") { input.movement=frame<14?glm::vec2(.5F,-.2F):glm::vec2(0,-1); input.jumpPressed=frame==24; input.jumpHeld=frame>=24&&frame<70; }
         // Sprint onto the pad and fly.
         if(scene=="flight"||scene=="launch"||scene=="dive") { input.movement={1,0}; input.sprintHeld=true; }
         // Boost tricks: dive from a flight (barrel roll), spring out of a slide (front flip).
@@ -229,6 +277,12 @@ int main(int argc,char** argv) {
         if(scene=="shield"&&frame>12) input.movement={0,1};
         // Clock pickup: walk into it (+30 s).
         if(scene=="clock"&&frame>20) input.movement={1,0};
+        // Crimson tile: walk onto it and stand there (a bite, then another a second later).
+        if(scene=="crimson"&&frame>10&&frame<38) input.movement={1,0};
+        if(scene=="lesson-clock"&&frame==1) camera.orbit((camera.yaw()-.6F)/.0016F,(.75F-camera.pitch())/.0016F);
+        if(scene=="lesson-wall") { input.movement={1,0}; input.jumpPressed=input.jumpHeld=game.wallTouching(); }
+        if(scene=="lesson-wall"&&frame==1) camera.orbit((camera.yaw()-1.F)/.0016F,(.5F-camera.pitch())/.0016F);
+        if(scene=="crimson"&&frame==1) camera.orbit((camera.yaw()-.35F)/.0016F,(.6F-camera.pitch())/.0016F);
         // Map edge: look in from beyond the east wall.
         if(scene=="edge"&&frame==1) camera.orbit((camera.yaw()-1.5708F)/.0016F,(.35F-camera.pitch())/.0016F);
         if(scene=="clock"&&frame==1) camera.orbit(1230,-60);  // look east, toward the clock
@@ -248,14 +302,18 @@ int main(int argc,char** argv) {
         // slow motion rather than a stalled frame); pressed edges wait until it ends.
         freeze=std::max(freeze,game.takeHitStop());
         if(freeze>0) {
-          freeze-=dt; heldEdges.jumpPressed|=input.jumpPressed; heldEdges.interactPressed|=input.interactPressed; heldEdges.crouchPressed|=input.crouchPressed; heldEdges.sprintPressed|=input.sprintPressed;
-          relay::Input slow=input; slow.jumpPressed=slow.interactPressed=slow.crouchPressed=slow.sprintPressed=false; game.update(dt*.08F,slow);
+          freeze-=dt; heldEdges.jumpPressed|=input.jumpPressed; heldEdges.interactPressed|=input.interactPressed; heldEdges.crouchPressed|=input.crouchPressed; heldEdges.sprintPressed|=input.sprintPressed; heldEdges.wallPressed|=input.wallPressed;
+          relay::Input slow=input; slow.jumpPressed=slow.interactPressed=slow.crouchPressed=slow.sprintPressed=slow.wallPressed=false; game.update(dt*.08F,slow);
         }
-        else { input.jumpPressed|=heldEdges.jumpPressed; input.interactPressed|=heldEdges.interactPressed; input.crouchPressed|=heldEdges.crouchPressed; input.sprintPressed|=heldEdges.sprintPressed; heldEdges=relay::Input{}; game.update(dt,input); }
+        else { input.jumpPressed|=heldEdges.jumpPressed; input.interactPressed|=heldEdges.interactPressed; input.crouchPressed|=heldEdges.crouchPressed; input.sprintPressed|=heldEdges.sprintPressed; input.wallPressed|=heldEdges.wallPressed; heldEdges=relay::Input{}; game.update(dt,input); }
       }
       if(arrival.active()&&screen==Screen::Playing&&(focused||frameLimit>0)) game.present(dt,arrival.elapsed);
       if(cameraRevision!=game.revision()) { camera.reset(game); cameraRevision=game.revision(); }
       if(!running) camera.update(game,dt);
+      if(audio) {
+        audio->setListener(camera.eye(), glm::vec3(std::cos(camera.yaw()),0,-std::sin(camera.yaw())));
+        audio->update(game,dt,screen==Screen::Playing&&!options.gallery);
+      }
       // Pause keeps the frozen level on screen; only the title shows the chamber.
       options.menu=screen==Screen::Title||(screen==Screen::Settings&&!settingsFromPause);
       if(options.menu) {
@@ -272,12 +330,18 @@ int main(int argc,char** argv) {
         // The first key pressed this frame feeds a pending rebind.
         int pressedKey=-1;
         for(int key:relay::KeyBindings::supportedKeys()) if(keys.pressed(key)) { pressedKey=key; break; }
-        if(relay::drawSettings(relay::keyBindings(),frameLimit>0?float(frame)/60:float(now),pressedKey,keys.pressed(GLFW_KEY_ESCAPE),settingsFromPause))
+        const bool leaving=relay::drawSettings(relay::keyBindings(),frameLimit>0?float(frame)/60:float(now),pressedKey,keys.pressed(GLFW_KEY_ESCAPE),settingsFromPause);
+        if(audio) { if(heardSettings>=0&&relay::settingsSelection()!=heardSettings) audio->menuMove(); if(leaving) audio->menuBack(); }
+        heardSettings=leaving?-1:relay::settingsSelection();
+        if(leaving)
           screen=settingsFromPause?Screen::Paused:Screen::Title;
       } else if(screen!=Screen::Playing) {
         const auto mode=screen==Screen::Title?relay::MenuMode::Title:relay::MenuMode::Pause;
         auto action=relay::drawMenu(mode,level,frameLimit>0?float(frame)/60:float(now),game.activeCheckpoint()>=0);
+        if(audio) { if(heardMenu>=0&&relay::menuSelection()!=heardMenu) audio->menuMove(); if(action!=relay::MenuAction::None) audio->menuConfirm(); }
+        heardMenu=relay::menuSelection();
         if(action==relay::MenuAction::Start) { game.reset(relay::Game::missionsUnlocked?level:relay::Game::tutorialLevel); camera.reset(game); screen=Screen::Playing; options.gallery=false; cursorFree=false; options.diagnostics=false; arrival.start(); }
+        if(action==relay::MenuAction::Practice) { game.reset(relay::Game::practiceLevel); camera.reset(game); screen=Screen::Playing; options.gallery=false; cursorFree=false; options.diagnostics=false; arrival.start(); }
         if(action==relay::MenuAction::Resume) { screen=Screen::Playing; cursorFree=false; }
         if(action==relay::MenuAction::Gallery) { screen=Screen::Playing; options.gallery=true; arrival.cancel(); }
         if(action==relay::MenuAction::Title) { screen=Screen::Title; arrival.cancel(); }
@@ -294,7 +358,7 @@ int main(int argc,char** argv) {
       if(const int request=ui.takeLevelRequest(); request>=0) transition.start(request);
       // Out of lives: once the shutdown has played, the level restarts behind the black transition.
       if(game.outOfLives()&&game.player().deathTime>=relay::Game::respawnDelay&&!transition.active()) transition.start(game.level());
-      if(transition.active()) relay::drawLevelTransition(transition.black(),transition.card(),transition.progress(),transition.target,relay::Game::nameOf(transition.target),frameLimit>0?float(frame)/60:float(now));
+      if(transition.active()) relay::drawLevelTransition(transition.black(),transition.card(),transition.progress(),transition.target,frameLimit>0?float(frame)/60:float(now));
       ui.render();
       stage(3);
       if(frameLimit>0&&frame>=20) frameMs.push_back(float((glfwGetTime()-frameStart)*1000));

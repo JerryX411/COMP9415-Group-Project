@@ -23,7 +23,7 @@ using namespace relay;
 bool near(float a,float b,float e=.015F) { return std::abs(a-b)<e; }
 void tick(Game& g,float duration,Input input={}) {
   const int n=int(std::ceil(duration*120));
-  for(int i=0;i<n;++i) { g.update(duration/float(n),input); input.jumpPressed=input.interactPressed=input.crouchPressed=input.sprintPressed=false; }
+  for(int i=0;i<n;++i) { g.update(duration/float(n),input); input.jumpPressed=input.interactPressed=input.crouchPressed=input.sprintPressed=input.wallPressed=false; }
 }
 void settle(Game& g,glm::vec3 p) { g.warpPlayer(p); tick(g,.025F); }
 // The eye inside level geometry. The boundary walls (just outside room()) do not count: the view
@@ -461,7 +461,7 @@ int main(int argc,char** argv) {
       // The rest by route: cores, the checkpoint, the plate and door, the exit.
       routeTo(g,g.cores()[0].position); tick(g,.5F,{{0,0},false,true}); CHECK(g.cores()[0].collected);
       routeTo(g,g.cores()[1].position); tick(g,.5F,{{0,0},false,true}); CHECK(g.cores()[1].collected);
-      routeTo(g,g.plates()[0].position); tick(g,.05F); CHECK(g.doors()[0].hold>0); CHECK(g.tutorialStep()>=10);
+      routeTo(g,g.plates()[0].position); tick(g,.05F); CHECK(g.doors()[0].hold>0); CHECK(g.tutorialStep()>=13);
       // Run straight for the door while it holds (across the speed pad).
       const glm::vec2 door(g.doors()[0].centre.x,g.doors()[0].centre.z);
       for(int i=0;i<1200&&g.player().position.z>13.F;++i) {
@@ -469,11 +469,201 @@ int main(int argc,char** argv) {
         const glm::vec2 aim=p.y>19.F?glm::vec2(door.x,18.5F):glm::vec2(door.x,12.F);
         g.update(1.F/120,{glm::normalize(aim-p),false,false,false}); CHECK(!g.playerIntersectsScene());
       }
-      CHECK(g.player().position.z<13.F); CHECK(g.tutorialStep()>=11);
-      routeTo(g,g.cores()[2].position); tick(g,.5F,{{0,0},false,true}); CHECK(g.cores()[2].collected);
-      CHECK(g.tutorialStep()==Game::tutorialSteps-1); CHECK(g.gateUnlocked());
+      CHECK(g.player().position.z<13.F); CHECK(g.tutorialStep()>=14);
+      // Steer straight at a floor point (also on raised blocks, where routeTo does not search).
+      const auto walkTo=[&](glm::vec2 goal,Input base) {
+        for(int i=0;i<900;++i) {
+          const glm::vec2 p(g.player().position.x,g.player().position.z),d=goal-p;
+          if(glm::length(d)<.15F) break;
+          Input in=base; in.movement=glm::normalize(d); g.update(1.F/120,in); CHECK(!g.playerIntersectsScene());
+        }
+      };
+      const auto use=[&] { tick(g,.6F,{{0,0},false,true}); };
+      // Hall 3: wake the exit-side portal by the door.
+      const PortalLink link=g.portals()[0];
+      routeTo(g,link.to+glm::vec3(1.2F,0,0)); use(); CHECK(g.portals()[0].toOn&&!g.portals()[0].linked()); CHECK(g.tutorialStep()>=15);
+      // Past the first trap (beside the pad), then the jetpack.
+      routeTo(g,{17,1,13.5F}); routeTo(g,{30.5F,1,13.5F}); CHECK(g.tutorialStep()>=16);
+      routeTo(g,g.pickups()[3].position); CHECK(g.player().jets==1); CHECK(g.tutorialStep()>=17);
+      // Jet across the long trap: wait for it to go safe, sprint, sprint again.
+      routeTo(g,{29.5F,1,9.75F});
+      while(!(g.trapPhase(2)==TrapPhase::Safe&&g.trapPhaseRemaining(2)>2.2F)) g.update(1.F/120,{});
+      const int armour=g.player().health;
+      for(int i=0;i<120&&glm::length(g.player().locomotion)<Game::sprintSpeed*.85F;++i) { g.update(1.F/120,run); CHECK(!g.playerIntersectsScene()); }
+      Input jet=run; jet.sprintPressed=true; tick(g,1.F/120,jet); CHECK(g.jetsUsed()==0); tick(g,.1F,run); tick(g,1.F/120,jet);
+      CHECK(g.jetsUsed()==1&&g.player().jets==0); CHECK(glm::length(g.player().locomotion)>=Game::jetSpeed-.5F);
+      until(44.5F,run); CHECK(g.player().health==armour); CHECK(g.tutorialStep()>=18);
+      tick(g,2.5F);
+      // The wall-jump lesson: walk onto the last pad (a boosted stride east) and jump at the wall.
+      routeTo(g,{44.5F,1,10.25F});
+      Input east; east.movement={1,0};
+      for(int i=0;i<600&&!g.wallTouching();++i) { g.update(1.F/120,east); CHECK(!g.playerIntersectsScene()); }
+      CHECK(g.wallTouching()); Input kick=east; kick.jumpPressed=kick.jumpHeld=true; tick(g,1.F/120,kick);
+      CHECK(g.wallJumpsDone()==1); CHECK(g.player().motion.trickKind==8);
+      tick(g,2.F); CHECK(g.tutorialStep()>=19);
+      // Spring boots, then up onto the upper floor, across its gap, the core and the portal.
+      routeTo(g,g.pickups()[1].position); CHECK(g.player().spring>0); CHECK(g.tutorialStep()>=20);
+      routeTo(g,{50,1,10.6F});
+      Input up; up.movement={0,-1}; up.jumpPressed=up.jumpHeld=true; tick(g,1.F/120,up); up.jumpPressed=false; tick(g,.9F,up);
+      CHECK(g.player().position.y>2.9F&&g.player().grounded); CHECK(g.tutorialStep()>=21);
+      walkTo({51,6},{});
+      for(int i=0;i<240&&g.player().position.x<52.2F;++i) g.update(1.F/120,east);
+      Input leap=east; leap.jumpPressed=leap.jumpHeld=true; tick(g,1.F/120,leap); leap.jumpPressed=false; tick(g,.8F,leap);
+      CHECK(g.player().position.x>55.2F&&g.player().position.y>2.9F);
+      walkTo({57.5F,6.3F},{}); tick(g,.3F); use(); CHECK(g.cores()[2].collected); CHECK(g.gateUnlocked()); CHECK(g.tutorialStep()>=22);
+      walkTo({56.6F,6.8F},{}); tick(g,.3F); use(); CHECK(g.portals()[0].linked()); CHECK(g.tutorialStep()>=23);
+      for(int i=0;i<600&&g.teleports()==0;++i) {
+        const glm::vec2 d=glm::vec2(link.from.x,link.from.z)-glm::vec2(g.player().position.x,g.player().position.z);
+        g.update(1.F/120,{glm::length(d)>.05F?glm::normalize(d):glm::vec2(0),false,false});
+      }
+      tick(g,.1F);
+      CHECK(g.teleports()==1); CHECK(glm::distance(g.player().position,link.to)<1.F); CHECK(g.tutorialStep()==Game::tutorialSteps-1);
       tick(g,.8F); routeTo(g,g.gatePosition()+glm::vec3(0,0,-2)); CHECK(g.state()==RunState::Won);
       std::cout<<"Training completed in "<<g.elapsed()<<"s\n";
+    }},
+    {"jetpack",[]{
+      // The jetpack pickup gives one charge; a double tap of sprint while moving fires it.
+      Game g; g.reset(Game::tutorialLevel);
+      const auto jet=std::find_if(g.pickups().begin(),g.pickups().end(),[](const Pickup& p) { return p.kind==PowerUp::Jet; });
+      CHECK(jet!=g.pickups().end()); settle(g,jet->position); tick(g,.05F); CHECK(g.player().jets==1);
+      const auto speed=[](const Game& h) { return glm::length(h.player().locomotion); };
+      // One tap only starts a sprint; taps further apart than doubleTap do nothing more; a double
+      // tap fires, even from a walk.
+      Game w; w.reset(Game::tutorialLevel); settle(w,{6,1,44}); w.setJetsForDebug(1);
+      Input walk; walk.movement={1,0}; tick(w,.6F,walk);
+      Input press=walk; press.sprintHeld=press.sprintPressed=true; tick(w,1.F/120,press); CHECK(w.player().jets==1&&w.jetsUsed()==0);
+      tick(w,Game::doubleTap+.1F,walk); tick(w,1.F/120,press); CHECK(w.jetsUsed()==0);
+      tick(w,.1F,walk); tick(w,1.F/120,press); CHECK(w.jetsUsed()==1&&w.player().jets==0);
+      // Standing still a double tap keeps the charge.
+      Game st; st.reset(Game::tutorialLevel); settle(st,{6,1,44}); st.setJetsForDebug(1);
+      Input tap; tap.sprintPressed=true; tick(st,1.F/120,tap); tick(st,.1F); tick(st,1.F/120,tap); CHECK(st.jetsUsed()==0);
+      // At a run it throws the courier forward into a boosted stride.
+      Game r; r.reset(Game::tutorialLevel); settle(r,{6,1,44}); r.setJetsForDebug(1);
+      Input run; run.movement={1,0}; run.sprintHeld=true;
+      for(int i=0;i<180&&speed(r)<Game::sprintSpeed*.85F;++i) r.update(1.F/120,run);
+      Input fire=run; fire.sprintPressed=true; tick(r,1.F/120,fire); CHECK(r.jetsUsed()==0); tick(r,.1F,run); tick(r,1.F/120,fire);
+      CHECK(r.player().jets==0&&r.jetsUsed()==1); CHECK(speed(r)>=Game::jetSpeed-.1F); CHECK(r.player().boost==Boost::Stride);
+      CHECK(r.boostTimeLeft()>Game::boostDuration-.1F); CHECK(r.player().motion.jetAge<.05F); CHECK(!r.playerIntersectsScene());
+      // A spent charge does nothing more.
+      tick(r,.2F,run); const float before=r.jetsUsed(); tick(r,1.F/120,fire); tick(r,.1F,run); tick(r,1.F/120,fire); CHECK(r.jetsUsed()==before);
+      // Mid-slide a single tap fires it, and the slide carries on at turbo.
+      Game sl; sl.reset(Game::tutorialLevel); settle(sl,{6,1,44}); sl.setJetsForDebug(1);
+      for(int i=0;i<180&&speed(sl)<Game::sprintSpeed*.85F;++i) sl.update(1.F/120,run);
+      Input drop=run; drop.crouchPressed=true; tick(sl,1.F/120,drop); CHECK(sl.player().sliding);
+      tick(sl,.4F,run); tick(sl,1.F/120,fire);
+      CHECK(sl.player().sliding&&sl.jetsUsed()==1); CHECK(speed(sl)>=Game::padSpeed+Game::slidePadBonus-.3F);
+      // Without a charge the same tap stands out of the slide as before.
+      Game nc; nc.reset(Game::tutorialLevel); settle(nc,{6,1,44});
+      for(int i=0;i<180&&speed(nc)<Game::sprintSpeed*.85F;++i) nc.update(1.F/120,run);
+      tick(nc,1.F/120,drop); CHECK(nc.player().sliding); tick(nc,.1F,run); tick(nc,1.F/120,fire); tick(nc,.05F,run); CHECK(!nc.player().crouching);
+    }},
+    {"portals",[]{
+      // Both ends must be woken (E) before the pair works; then it works both ways.
+      Game g; g.reset(Game::tutorialLevel); CHECK(g.portals().size()==1);
+      const PortalLink link=g.portals()[0]; CHECK(near(link.from.y,3)&&near(link.to.y,1));
+      settle(g,link.from); tick(g,.2F); CHECK(g.teleports()==0);   // asleep: nothing happens
+      const auto use=[&] { tick(g,.6F,{{0,0},false,true}); };
+      settle(g,link.from+glm::vec3(1.1F,0,0)); CHECK(g.availableInteraction()==Interaction::Portal); use();
+      CHECK(g.portals()[0].fromOn&&!g.portals()[0].linked());
+      settle(g,link.from); tick(g,.2F); CHECK(g.teleports()==0);   // half linked: still nothing
+      settle(g,link.to+glm::vec3(1.1F,0,0)); use(); CHECK(g.portals()[0].linked());
+      CHECK(g.availableInteraction()!=Interaction::Portal);
+      settle(g,link.from+glm::vec3(1.1F,0,0)); tick(g,1.2F);
+      Input step; step.movement={-1,0}; for(int i=0;i<240&&g.teleports()==0;++i) g.update(1.F/120,step);
+      CHECK(g.teleports()==1); CHECK(glm::distance(g.player().position,link.to)<.2F); CHECK(g.player().motion.teleportAge<.1F);
+      CHECK(!g.playerIntersectsScene()); tick(g,1.5F); CHECK(g.teleports()==1);   // standing on the arrival end: no bounce back
+      // Step off and back on: the other way.
+      Input off; off.movement={1,0}; tick(g,.5F,off); tick(g,.3F); CHECK(g.teleports()==1);
+      Input back; back.movement={-1,0}; for(int i=0;i<240&&g.teleports()==1;++i) g.update(1.F/120,back);
+      CHECK(g.teleports()==2); CHECK(glm::distance(g.player().position,link.from)<.2F); CHECK(!g.playerIntersectsScene());
+      // Level files keep the pair, with each end on top of what it stands on.
+      LevelData d=g.captureLevel(); CHECK(d.portals.size()==1);
+      Game h; h.reset(Game::tutorialLevel); h.applyLevel(d);
+      CHECK(h.portals().size()==1&&glm::distance(h.portals()[0].from,link.from)<1e-4F&&glm::distance(h.portals()[0].to,link.to)<1e-4F);
+    }},
+    {"practice",[]{
+      // The practice field: open floor, every power-up together, back in a second, a pad runway,
+      // no clock, no exit, unlimited reboots.
+      Game g; g.reset(Game::practiceLevel); CHECK(g.practice()&&!g.timed()&&!g.tutorial()); CHECK(!g.playerIntersectsScene());
+      const float clock=g.timeRemaining(); tick(g,1.F); CHECK(g.timeRemaining()==clock);
+      for(PowerUp kind:{PowerUp::Spring,PowerUp::Shield,PowerUp::Time,PowerUp::Jet})
+        CHECK(std::any_of(g.pickups().begin(),g.pickups().end(),[&](const Pickup& p) { return p.kind==kind; }));
+      CHECK(g.speedPads().size()>=4&&g.cores().empty());
+      // Every power-up (the clock too) is back after a second.
+      for(std::size_t i=0;i<g.pickups().size();++i) {
+        settle(g,g.pickups()[i].position); tick(g,.05F); CHECK(g.pickups()[i].respawn>0||g.pickups()[i].taken==false);
+        settle(g,g.pickups()[i].position+glm::vec3(0,0,3)); tick(g,Game::practiceRespawn+.1F); CHECK(g.pickups()[i].respawn==0&&!g.pickups()[i].taken);
+      }
+      // Mostly open: the only blocks are the low runway curbs.
+      int solid=0; for(int z=4;z<60;++z) for(int x=4;x<60;++x) for(int y=1;y<4;++y) if(g.world().cell(x,y,z)) { ++solid; CHECK(y==1); }
+      CHECK(solid<120);
+      // No exit to walk through, and the menu name.
+      settle(g,g.gatePosition()); CHECK(!g.playerIntersectsScene()); CHECK(std::string(Game::nameOf(Game::practiceLevel))=="PRACTICE FIELD");
+    }},
+    {"wall_action",[]{
+      // Left mouse at a wall: walking shoves off it; a sprint, a jump, a slide or a flight kicks
+      // straight back at the same speed with its own flip. The practice field's west wall is x 4.
+      const auto speed=[](const Game& h) { return glm::length(h.player().locomotion); };
+      Input wall; wall.wallPressed=true;
+      // Nothing near: nothing happens.
+      { Game g; g.reset(Game::practiceLevel); settle(g,{20,1,30}); tick(g,1.F/120,wall); CHECK(g.player().motion.pushAge>1&&g.wallJumpsDone()==0); }
+      // Walking into it: a shove back, still facing the wall, no flip.
+      { Game g; g.reset(Game::practiceLevel); settle(g,{6.5F,1,30}); Input walk; walk.movement={-.6F,0};  // slow enough not to bounce
+        for(int i=0;i<240&&g.player().position.x>4.85F;++i) g.update(1.F/120,walk);
+        Input push=walk; push.wallPressed=true; tick(g,1.F/120,push);
+        CHECK(g.player().motion.pushAge<.05F&&g.wallJumpsDone()==0); CHECK(g.player().locomotion.x>3.F); CHECK(g.player().grounded); }
+      // Sprinting: a laid-out running flip off the wall, straight back at sprint speed, high.
+      { Game g; g.reset(Game::practiceLevel); settle(g,{12,1,30}); Input run; run.movement={-1,0}; run.sprintHeld=true;
+        for(int i=0;i<360&&g.player().position.x>5.1F;++i) g.update(1.F/120,run);
+        const float before=speed(g),xBefore=g.player().position.x; Input kick=run; kick.wallPressed=true; tick(g,1.F/120,kick);
+        const float wallX=g.player().position.x;
+        CHECK(g.wallJumpsDone()==1&&g.player().motion.trickKind==9); CHECK(g.player().locomotion.x>0&&speed(g)>=std::min(Game::wallReboundMax,Game::wallRebound*before)-.2F);
+        CHECK(wallX>xBefore+.1F);  // snapped off the wall at once (it moved toward it first)
+        CHECK(g.player().velocity.y>9.F); CHECK(!g.playerIntersectsScene()); tick(g,1.2F); CHECK(g.player().position.x>7.F); }
+      // Pressed early, up to two cells out: it waits and fires on reaching the wall.
+      { Game g; g.reset(Game::practiceLevel); settle(g,{14,1,30}); Input run; run.movement={-1,0}; run.sprintHeld=true;
+        for(int i=0;i<360&&g.player().position.x>4.7F+Game::wallTrigger-.1F;++i) g.update(1.F/120,run);
+        Input kick=run; kick.wallPressed=true; tick(g,1.F/120,kick); CHECK(g.wallJumpsDone()==0);
+        for(int i=0;i<120&&g.wallJumpsDone()==0;++i) g.update(1.F/120,run);
+        CHECK(g.wallJumpsDone()==1&&g.player().motion.trickKind==9&&g.player().locomotion.x>0); }
+      // At 45 degrees it still counts; at a glancing 30 degrees it does not.
+      for(float angle:{50.F,30.F}) {
+        Game g; g.reset(Game::practiceLevel); settle(g,{12,1,30}); const float a=angle*3.14159F/180;
+        Input run; run.movement={-std::sin(a),-std::cos(a)}; run.sprintHeld=true;
+        for(int i=0;i<360&&g.player().position.x>5.F;++i) g.update(1.F/120,run);
+        Input kick=run; kick.wallPressed=true; tick(g,1.F/120,kick); tick(g,.3F,run);
+        CHECK((g.wallJumpsDone()==1)==(angle>45)); }
+      // In the air: the back-flip wall kick, and only wallJumpsPerAir of them before landing.
+      { Game g; g.reset(Game::practiceLevel); settle(g,{6.5F,1,30}); Input hop; hop.movement={-1,0}; hop.jumpPressed=hop.jumpHeld=true;
+        tick(g,1.F/120,hop); hop.jumpPressed=false; for(int i=0;i<120&&g.player().position.x>5.F;++i) g.update(1.F/120,hop);
+        CHECK(!g.player().grounded); Input kick=hop; kick.wallPressed=true; tick(g,1.F/120,kick);
+        CHECK(g.wallJumpsDone()==1&&g.player().motion.trickKind==8&&g.player().locomotion.x>0); }
+      // Mid-slide: a low aerial off the wall, out of the slide.
+      { Game g; g.reset(Game::practiceLevel); settle(g,{12,1,30}); Input run; run.movement={-1,0}; run.sprintHeld=true;
+        for(int i=0;i<120&&speed(g)<Game::sprintSpeed*.9F;++i) g.update(1.F/120,run);
+        Input drop=run; drop.crouchPressed=true; tick(g,1.F/120,drop); CHECK(g.player().sliding);
+        for(int i=0;i<240&&g.player().position.x>5.F&&g.player().sliding;++i) g.update(1.F/120,run);
+        Input kick=run; kick.wallPressed=true; tick(g,1.F/120,kick);
+        CHECK(g.wallJumpsDone()==1&&g.player().motion.trickKind==10&&!g.player().sliding&&!g.player().grounded&&g.player().locomotion.x>0); }
+      // In flight (a runway pad heading north to the wall at z 4): a flip turn, still flying back south.
+      { Game g; g.reset(Game::practiceLevel); settle(g,{47.5F,1,21}); Input fly; fly.movement={0,-1}; fly.sprintHeld=true;
+        for(int i=0;i<600&&!(g.player().boost==Boost::Flight&&g.player().position.z<5.3F);++i) g.update(1.F/120,fly);
+        CHECK(g.player().boost==Boost::Flight); const float before=speed(g); Input kick=fly; kick.wallPressed=true; tick(g,1.F/120,kick);
+        CHECK(g.wallJumpsDone()==1&&g.player().motion.trickKind==11&&g.player().boost==Boost::Flight); CHECK(g.player().locomotion.y>0&&speed(g)>=before-.2F); }
+    }},
+    {"upper_floor",[]{
+      // Training's upper floor is two blocks high: spring boots jump onto it, a plain jump does not.
+      for(bool spring:{false,true}) {
+        Game g; g.reset(Game::tutorialLevel);
+        if(spring) { settle(g,g.pickups()[1].position); tick(g,.05F); CHECK(g.player().spring>0); }
+        settle(g,{50,1,10.6F});
+        Input up; up.movement={0,-1}; up.jumpPressed=up.jumpHeld=true; tick(g,1.F/120,up); up.jumpPressed=false; tick(g,.9F,up);
+        CHECK((g.player().position.y>2.9F)==spring); CHECK(!g.playerIntersectsScene());
+      }
+      // Items there stand on the blocks; inside a tunnel they stay on the floor.
+      Game g; g.reset(Game::tutorialLevel);
+      CHECK(near(g.surfaceAt(57.5F,5.5F),3)&&near(g.cores()[2].position.y,3.65F));
+      CHECK(near(g.surfaceAt(48,39),1)&&near(g.surfaceAt(10,10),1));
     }},
     {"training_reboots",[]{
       // Training never runs out of lives: each shutdown reboots, without a time penalty.
@@ -642,7 +832,7 @@ int main(int argc,char** argv) {
     }},
     {"time_pickup",[]{
       // The clock adds 30 s to a mission's countdown once: it stays spent (no respawn) until the
-      // level restarts. Both missions have one; training (no clock) has none.
+      // level restarts. Both missions have one.
       for(int level:{0,1}) {
         Game g; g.reset(level); tick(g,1.F);
         const auto it=std::find_if(g.pickups().begin(),g.pickups().end(),[](const Pickup& p) { return p.kind==PowerUp::Time; });
@@ -657,8 +847,11 @@ int main(int argc,char** argv) {
         CHECK(g.pickups()[index].taken); CHECK(g.timeRemaining()<later);
         g.reset(level); CHECK(!g.pickups()[index].taken);
       }
+      // Training shows one too, but its clock is infinite: taking it changes nothing but the HUD.
       Game t; t.reset(Game::tutorialLevel);
-      CHECK(std::none_of(t.pickups().begin(),t.pickups().end(),[](const Pickup& p) { return p.kind==PowerUp::Time; }));
+      const auto clock=std::find_if(t.pickups().begin(),t.pickups().end(),[](const Pickup& p) { return p.kind==PowerUp::Time; });
+      CHECK(clock!=t.pickups().end()); const float before=t.timeRemaining();
+      settle(t,clock->position); tick(t,.05F); CHECK(near(t.timeRemaining(),before)); CHECK(t.timeBonusAge()<.2F);
     }},
     {"camera_edge",[]{
       // Standing on the map edge with the view looking in from outside: the view keeps its full
@@ -676,7 +869,7 @@ int main(int argc,char** argv) {
     {"level_files",[]{
       // Every built-in level survives a save and load through the level file format unchanged:
       // the same voxels, items, spawn, gate and clock.
-      for(int level:{0,1,Game::tutorialLevel}) {
+      for(int level:{0,1,Game::tutorialLevel,Game::practiceLevel}) {
         Game g; g.reset(level); const LevelData before=g.captureLevel();
         const auto path=std::filesystem::temp_directory_path()/("relay_level_test_"+std::to_string(level)+".txt");
         std::string error; CHECK(before.save(path,&error));
@@ -686,6 +879,8 @@ int main(int argc,char** argv) {
         CHECK(h.cores().size()==g.cores().size()&&h.traps().size()==g.traps().size()&&h.switches().size()==g.switches().size());
         CHECK(h.checkpoints().size()==g.checkpoints().size()&&h.movers().size()==g.movers().size()&&h.pickups().size()==g.pickups().size());
         CHECK(h.doors().size()==g.doors().size()&&h.plates().size()==g.plates().size()&&h.speedPads().size()==g.speedPads().size());
+        CHECK(h.drainTiles().size()==g.drainTiles().size()&&h.portals().size()==g.portals().size());
+        for(std::size_t i=0;i<g.pickups().size();++i) { CHECK(h.pickups()[i].kind==g.pickups()[i].kind); CHECK(glm::distance(g.pickups()[i].position,h.pickups()[i].position)<1e-4F); }
         for(std::size_t i=0;i<g.cores().size();++i) CHECK(glm::distance(g.cores()[i].position,h.cores()[i].position)<1e-4F);
         for(std::size_t i=0;i<g.doors().size();++i) { CHECK(glm::distance(g.doors()[i].centre,h.doors()[i].centre)<1e-4F); CHECK(glm::distance(g.doors()[i].half,h.doors()[i].half)<1e-4F); }
         for(std::size_t i=0;i<g.movers().size();++i) { CHECK(glm::distance(g.movers()[i].start,h.movers()[i].start)<1e-4F); CHECK(glm::distance(g.movers()[i].end,h.movers()[i].end)<1e-4F); CHECK(near(g.movers()[i].period,h.movers()[i].period)); }
@@ -706,6 +901,41 @@ int main(int argc,char** argv) {
       LevelData back; CHECK(LevelData::load(tallPath,back)); std::filesystem::remove(tallPath);
       CHECK(back.height==6&&back.cell(12,5,12)==LevelData::Wall&&back.cell(12,4,12)==LevelData::Empty);
       Game t; t.applyLevel(back); CHECK(t.world().cell(12,5,12)==LevelData::Wall); CHECK(t.captureLevel().height==5);
+      // Size: growing the north and west edges keeps everything in place on the map (it shifts
+      // with the new rows), shrinking takes them back; the outer wall height reaches the game.
+      LevelData grown=Game().captureLevel(); const LevelData original=grown;
+      grown.growEdge(0,3); grown.growEdge(2,2); grown.growEdge(1,1); grown.growEdge(3,4);
+      CHECK(grown.width()==original.width()+6&&grown.depth()==original.depth()+4);
+      CHECK(near(grown.cores[0].x,original.cores[0].x+2)&&near(grown.cores[0].y,original.cores[0].y+3));
+      CHECK(grown.cell(10+2,1,19+3)==original.cell(10,1,19));
+      grown.growEdge(0,-3); grown.growEdge(2,-2); grown.growEdge(1,-1); grown.growEdge(3,-4);
+      CHECK(grown.width()==original.width()&&near(grown.spawn.x,original.spawn.x)&&grown.cells==original.cells);
+      grown.growEdge(3,500); CHECK(grown.width()==LevelData::maxSide);
+      LevelData walled=LevelData::blank(40,30,12); walled.wall=9; walled.setCell(20,11,20,LevelData::Wall);
+      Game big; big.applyLevel(walled);
+      CHECK(big.room().max.x==44&&big.room().max.z==34); CHECK(big.world().cell(3,9,10)!=0&&big.world().cell(3,10,10)==0);
+      CHECK(big.world().cell(20,11,20)==LevelData::Wall); CHECK(big.captureLevel().wall==9);
+    }},
+    {"crimson_tile",[]{
+      // Stepping on crimson costs 5 s at once; standing on it bites again only after a second, and
+      // stepping off and straight back on waits out that second too.
+      Game g; CHECK(!g.drainTiles().empty());
+      const auto& t=g.drainTiles()[0]; const glm::vec3 on((t.area.min.x+t.area.max.x)*.5F,1,(t.area.min.z+t.area.max.z)*.5F),off=on+glm::vec3(0,0,-3.5F);
+      settle(g,off); const float start=g.timeRemaining();
+      g.warpPlayer(on); tick(g,.05F);
+      CHECK(g.timeRemaining()<start-Game::drainPenalty+.1F&&g.timeRemaining()>start-Game::drainPenalty-.2F); CHECK(g.timePenaltyAge()<.1F);
+      const float first=g.timeRemaining();
+      tick(g,.6F); CHECK(g.timeRemaining()>first-.7F);
+      tick(g,.5F); CHECK(g.timeRemaining()<first-Game::drainPenalty);
+      const float second=g.timeRemaining();
+      g.warpPlayer(off); tick(g,.1F); g.warpPlayer(on); tick(g,.1F); CHECK(g.timeRemaining()>second-.5F);
+      // Jumping over it costs nothing.
+      Game air; settle(air,off); const float before=air.timeRemaining(); air.warpPlayer(on+glm::vec3(0,1.2F,0)); air.update(1.F/120,{});
+      CHECK(air.timeRemaining()>before-.1F);
+      // Training has no clock: the tile flares but takes nothing.
+      Game tr; tr.reset(Game::tutorialLevel); LevelData d=tr.captureLevel(); d.drains.push_back({{20,36},{23,38}}); tr.applyLevel(d);
+      settle(tr,{21.5F,1,40.5F}); const float clock=tr.timeRemaining(); tr.warpPlayer({21.5F,1,37}); tick(tr,.05F);
+      CHECK(near(tr.timeRemaining(),clock)); CHECK(tr.timePenaltyAge()<.1F);
     }},
     {"camera_steady",[]{
       // A still courier, seen from any angle, must not make the view tremble: frame to frame the

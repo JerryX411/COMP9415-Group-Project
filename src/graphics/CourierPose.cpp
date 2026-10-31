@@ -32,15 +32,36 @@ Foot gait(float phase,float sprint,float stride=0) {
 }
 // Tricks: duration by kind and the eased 0..1 progress (0 when none is playing).
 float trickLength(int kind) {
-  constexpr float lengths[]{0,.42F,.5F,.38F,.36F,.42F,.45F,.55F,.5F};
-  return kind>0&&kind<9?lengths[kind]:.4F;
+  constexpr float lengths[]{0,.42F,.5F,.38F,.36F,.42F,.45F,.55F,.5F,.62F,.5F,.55F};
+  return kind>0&&kind<12?lengths[kind]:.4F;
 }
 // How high each trick lifts the body (on top of any jump).
 float trickLift(int kind) {
-  constexpr float lifts[]{0,.2F,.38F,.1F,.24F,.24F,.2F,.34F,.3F};
-  return kind>0&&kind<9?lifts[kind]:0;
+  constexpr float lifts[]{0,.2F,.38F,.1F,.24F,.24F,.2F,.34F,.3F,.42F,.22F,.14F};
+  return kind>0&&kind<12?lifts[kind]:0;
 }
 float trickPhase(const CourierMotion& a) { return a.trickKind>0&&a.trickAge<trickLength(a.trickKind)?a.trickAge/trickLength(a.trickKind):-1; }
+// Trick turn: a small wind-up against the turn, a hard snap through it and a slight overshoot
+// that settles, instead of an even ease, so the move reads as driven rather than floated.
+float trickTurn(float t) { return curve(t,{{0,0},{.14F,-.04F},{.64F,1.045F},{.84F,.99F},{1,1}}); }
+// Boosted tricks (the spinning kip-up, the corkscrew, the wall kick, anything while boosted) hit
+// harder: bigger wind-up, squash, stretch and follow-through.
+float trickPower(const Player& p) {
+  const int kind=p.motion.trickKind;
+  return kind==5||kind>=7||p.boost!=Boost::None?1.45F:1.F;
+}
+// After a trick: the plant (a squash of weight as it lands, 0..1) and the follow-through (a
+// damped overshoot along the trick's axis, -1..1), both over about a third of a second.
+float trickPlant(const CourierMotion& a) {
+  if(a.trickKind<=0) return 0;
+  const float u=a.trickAge-trickLength(a.trickKind);
+  return u>=0&&u<.3F?curve(u,{{0,0},{.04F,1},{.2F,0}}):0;
+}
+float trickSettle(const CourierMotion& a) {
+  if(a.trickKind<=0) return 0;
+  const float u=a.trickAge-trickLength(a.trickKind);
+  return u>=0&&u<.4F?std::exp(-9.F*u)*std::sin(u*26.F):0;
+}
 float ankleHeight(const Foot& foot) {
   // Rotate about the ankle while keeping the entire boot sole above its target.
   return foot.lift+.155F*std::cos(foot.pitch)+(foot.pitch>=0?.125F:.275F)*std::abs(std::sin(foot.pitch))+.006F;
@@ -61,12 +82,22 @@ void SceneModels::poseRobot(const Player& p) {
   // mid-trick; the twist out of a slide also scissors the legs.
   const float trickT=trickPhase(a),trick=trickT>=0?std::sin(trickT*pi):0;
   const int kind=a.trickKind;
-  const float tuckTrick=kind==1||kind==2||kind==7||kind==8?trick:kind==4||kind==5?.6F*trick:0;
+  const float tuckTrick=kind==1||kind==2||kind==7||kind==8||kind==10||kind==11?trick:kind==4||kind==5?.6F*trick:0;
+  // The running wall flip is laid out instead: body long and arched, legs together, arms flung
+  // up and wide, which reads as the flip with the most tension.
+  const float layout=kind==9?trick:0;
   const float spinTrick=kind==3||kind==5||kind==6?trick:0,scissor=kind==6?trick:0;
   // Wall kick: both legs start driven back into the wall, then tuck.
-  const float wallPush=kind==8&&trickT>=0?curve(trickT,{{0,1},{.12F,1},{.35F,0}}):0;
+  const float wallPush=kind>=8&&kind<=11&&trickT>=0?curve(trickT,{{0,1},{kind==9?.16F:.12F,1},{.35F,0}}):0;
+  // Wall shove (walking): both palms drive into the wall, then the arms give as the body is pushed back.
+  const float shove=a.pushAge<1?curve(a.pushAge,{{0,0},{.05F,1},{.16F,.75F},{.42F,0}}):0;
   // Kip-up: the legs snap through under the body, then drive into the first stride.
   const float kipDrive=(kind==4||kind==5)&&trickT>=0?curve(trickT,{{0,0},{.3F,0},{.55F,1},{1,0}}):0;
+  // Weight around a trick: a wind-up dip and arm pull-back as it starts, a plant as it lands,
+  // then the follow-through (see trickPlant / trickSettle); boosted tricks hit harder.
+  const float power=trickPower(p);
+  const float windup=trickT>=0?curve(trickT,{{0,0},{.07F,1},{.16F,0}})*power:0;
+  const float plant=trickPlant(a)*power,settle=trickSettle(a)*power;
   // Crouch is a mechanical tuck sized for one-voxel gaps: see the end of the torso block.
   const float crouch=std::clamp(p.crouchBlend,0.F,1.F);
   // Hits: h is the recoil weight; f and sd are the push direction in the courier's frame.
@@ -131,6 +162,8 @@ void SceneModels::poseRobot(const Player& p) {
   right.lift+=.12F*spinTrick; right.z-=.06F*spinTrick;
   left.z+=.16F*scissor; right.z-=.14F*scissor; left.pitch-=.5F*scissor; right.pitch+=.3F*scissor;
   for(auto* foot:{&left,&right}) { foot->z=glm::mix(foot->z,.2F,wallPush); foot->lift=glm::mix(foot->lift,.1F,wallPush); foot->pitch=glm::mix(foot->pitch,-.7F,wallPush); }
+  for(auto* foot:{&left,&right}) { foot->z=glm::mix(foot->z,.02F,layout); foot->lift=glm::mix(foot->lift,.02F,layout); foot->pitch=glm::mix(foot->pitch,-.85F,layout); }
+  left.z+=.06F*shove; right.z+=.08F*shove;  // the feet brace back
   left.z-=.1F*kipDrive; right.z+=.12F*kipDrive; left.pitch-=.4F*kipDrive;
   // Slide: the right leg shoots out straight on its heel, the left folds under the body.
   right.z=glm::mix(right.z,-.46F,slide); right.lift=glm::mix(right.lift,0.F,slide); right.pitch=glm::mix(right.pitch,.50F,slide);
@@ -141,6 +174,9 @@ void SceneModels::poseRobot(const Player& p) {
   // Footfalls nod the torso (sprint steps hardest); bodyScale adds the squash.
   const float footfall=curve(a.stepAge,{{0,0},{.05F,1},{.16F,0}})*a.stepStrength*gaitWeight;
   pelvis-=.13F*land+.055F*start+.075F*brake+.02F*launch+.07F*compress;
+  // Trick wind-up and plant, the plant of a kip-up into the stride, and the shove of a pad.
+  const float popPlant=a.popAge<1?curve(a.popAge,{{0,0},{.04F,1},{.15F,0}}):0;
+  pelvis-=(.05F*windup+.07F*plant+.06F*popPlant)*ground;
   pelvis-=.29F*crouch;
   if(a.wakeTime>=0) pelvis-=.17F*(1-ease((a.wakeTime-.65F)/1.1F));
   pelvis+=.025F*joy+.015F*std::sin(p.idlePhase*2.2F)*(1-move)*ground;
@@ -185,12 +221,30 @@ void SceneModels::poseRobot(const Player& p) {
   const float surge=std::clamp(a.surge,0.F,1.F)*slide;
   n[body_].rotation.x=glm::mix(n[body_].rotation.x,.38F+.14F*surge,slide); n[head_].rotation.x=glm::mix(n[head_].rotation.x,-.38F-.12F*surge,slide);
   n[body_].rotation.z+=.10F*slide; n[body_].rotation.y+=.22F*slide; n[head_].rotation.y-=.18F*slide;
+  // Drop-in jolt: momentum pitches the body forward for an instant before it snaps back into
+  // the skid lean (twice as hard on a boosted slide).
+  const float dropIn=a.slideAge<1?curve(a.slideAge,{{0,0},{.04F,1},{.15F,0}})*slide*(1+std::clamp(a.surge,0.F,1.F)):0;
+  n[body_].rotation.x-=.22F*dropIn; n[head_].rotation.x+=.14F*dropIn;
   // Pop out of a slide: a forward lunge with a big opposite-arm pump (arms below). Rush, above
   // sprint speed: the body tips into the wind and both arms sweep back.
   const float pop=a.popAge<1?curve(a.popAge,{{0,0},{.05F,1},{.2F,.45F},{.36F,0}}):0;
   const float boost=a.boostAge<1?curve(a.boostAge,{{0,0},{.06F,1},{.35F,.3F},{.6F,0}}):0;
   const float rush=std::max(boost,std::clamp((glm::length(glm::vec2(p.velocity.x,p.velocity.z))-Game::sprintSpeed)/4.F,0.F,1.F)*ground*(1-slide));
-  n[body_].rotation.x-=.28F*pop+.16F*rush; n[head_].rotation.x+=.14F*pop+.10F*rush;
+  n[body_].rotation.x-=.28F*pop*(kind==5?1.3F:1.F)+.16F*rush; n[head_].rotation.x+=.14F*pop+.10F*rush;
+  // Speed-pad whiplash: the shove snaps the body back for an instant before it whips forward into
+  // the rush; the head lags the other way (arms below).
+  const float whip=a.boostAge<1?curve(a.boostAge,{{0,0},{.035F,1},{.1F,-.7F},{.22F,.15F},{.34F,0}}):0;
+  n[body_].rotation.x+=.24F*whip; n[head_].rotation.x-=.16F*whip;
+  // Trick follow-through: the body overshoots along the trick's axis and settles, the head
+  // counters it.
+  if(settle!=0) {
+    if(kind==2||kind==4||kind==5||kind==7||kind==8) { n[body_].rotation.x-=.2F*settle; n[head_].rotation.x+=.13F*settle; }
+    if(kind==1) { n[body_].rotation.z+=.24F*settle; n[head_].rotation.z-=.15F*settle; }
+    if(kind==3||kind==5||kind==6||kind==7) { n[body_].rotation.y+=.3F*settle; n[head_].rotation.y-=.2F*settle; }
+  }
+  n[body_].rotation.x-=.06F*windup; n[head_].rotation.x+=.06F*windup;
+  n[body_].rotation.x+=.28F*layout; n[head_].rotation.x-=.22F*layout;  // arched
+  n[body_].rotation.x+=.2F*shove; n[head_].rotation.x-=.1F*shove;     // pushed back off the wall
   // Stride: a touch more lean and a bigger, bouncier arm swing. Flight: the head lifts to look
   // ahead of the tipped body.
   n[body_].rotation.x-=.08F*stride*move; n[head_].rotation.x+=.05F*stride*move+.62F*flight;
@@ -231,6 +285,13 @@ void SceneModels::poseRobot(const Player& p) {
   n[shoulderL_].rotation.z-=(.32F+.25F*takeoff)*flight; n[shoulderR_].rotation.z+=(.32F+.25F*takeoff)*flight;
   for(int shoulder:{shoulderL_,shoulderR_}) n[shoulder].rotation.x=glm::mix(n[shoulder].rotation.x,-.85F,.8F*rush);
   n[shoulderL_].rotation.z-=.25F*rush; n[shoulderR_].rotation.z+=.25F*rush;
+  // Arms in the transitions: thrown back by a pad's shove, pulled back in a trick's wind-up, and
+  // flung through (then recovering) in its follow-through.
+  for(int shoulder:{shoulderL_,shoulderR_}) n[shoulder].rotation.x-=.55F*std::max(0.F,whip)+.45F*windup-.35F*settle;
+  for(int shoulder:{shoulderL_,shoulderR_}) n[shoulder].rotation.x=glm::mix(glm::mix(n[shoulder].rotation.x,2.3F,layout),1.45F,shove);
+  n[shoulderL_].rotation.z-=.9F*layout+.12F*shove; n[shoulderR_].rotation.z+=.9F*layout+.12F*shove;
+  for(int elbow:{elbowL_,elbowR_}) n[elbow].rotation.x=glm::mix(n[elbow].rotation.x,.12F,std::max(layout,shove));
+  n[shoulderL_].rotation.z-=.18F*std::abs(whip)+.12F*plant; n[shoulderR_].rotation.z+=.18F*std::abs(whip)+.12F*plant;
   for(int elbow:{elbowL_,elbowR_}) n[elbow].rotation.x+=.75F*crouch+.5F*pop+.25F*stride*move;
   for(int elbow:{elbowL_,elbowR_}) n[elbow].rotation.x=glm::mix(n[elbow].rotation.x,.15F,flight);
   for(int elbow:{elbowL_,elbowR_}) n[elbow].rotation.x=glm::mix(n[elbow].rotation.x,1.6F,tuckTrick)*(1-.7F*spinTrick);
@@ -256,6 +317,12 @@ void SceneModels::poseRobot(const Player& p) {
   n[shoulderR_].rotation.x=glm::mix(n[shoulderR_].rotation.x,1.62F,joy);
   n[elbowR_].rotation.x=glm::mix(n[elbowR_].rotation.x,1.35F,ease(joy*2));
   n[head_].rotation.z-=joy*.10F; n[body_].rotation.x+=joy*.06F;
+  // Power-up absorbed: a quick flex, chest out and head up, elbows bent and fists clenched, arms
+  // flared; the eyes take on the power-up's colour (below).
+  const float charged=a.pickupAge<1?curve(a.pickupAge,{{0,0},{.07F,1},{.35F,.5F},{.6F,0}})*(1-death)*(1-slide):0;
+  n[body_].rotation.x+=.1F*charged; n[head_].rotation.x-=.12F*charged;
+  n[shoulderL_].rotation.z-=.35F*charged; n[shoulderR_].rotation.z+=.35F*charged;
+  for(int elbow:{elbowL_,elbowR_}) n[elbow].rotation.x=glm::mix(n[elbow].rotation.x,1.3F,charged);
   if(a.victorious) {
     for(int shoulder:{shoulderL_,shoulderR_}) n[shoulder].rotation.x=glm::mix(n[shoulder].rotation.x,1.40F+.12F*cheer,victorious);
     for(int elbow:{elbowL_,elbowR_}) n[elbow].rotation.x=glm::mix(n[elbow].rotation.x,1.35F,ease(victorious*2));
@@ -347,6 +414,27 @@ void SceneModels::poseRobot(const Player& p) {
   // Kept below 1: the shader reads emission above 1 as an unlit halo, which would dim the strip.
   n[packLight_].emission=std::min(.98F,bindPose_[packLight_].emission+.53F*p.backGlow);
   n[packLight_].colour=glm::mix(bindPose_[packLight_].colour,glm::vec3(.8F,.97F,1),p.backGlow);
+  for(int i=0;i<6;++i) n[fingers_[i]].rotation.x-=.9F*charged;
+  if(a.pickupAge<1&&p.deathTime<=0) {
+    // The lights (eyes, pack strip, cheeks...) flush with the power-up's colour and fade back.
+    const float flush=curve(a.pickupAge,{{0,0},{.05F,1},{.45F,.6F},{1,0}});
+    const glm::vec3 colour=pickupColour(PowerUp(a.pickupKind));
+    for(std::size_t i=0;i<n.size();++i) if(n[i].emission>0) n[i].colour=glm::mix(n[i].colour,colour,.8F*flush);
+  }
+  if(a.hackAge<.9F&&p.deathTime<=0) {
+    // Crimson bite, "hacked": the lights pulse red and black (slowly, not a strobe), the eyes narrow to red slits on the
+    // dark beats, and the head and body twitch.
+    const float hack=curve(a.hackAge,{{0,0},{.03F,1},{.6F,.75F},{.9F,0}});
+    const bool dark=std::sin(p.idlePhase*17.F)+std::sin(p.idlePhase*7.F)>.6F;
+    for(std::size_t i=0;i<n.size();++i) if(n[i].emission>0) {
+      n[i].colour=glm::mix(n[i].colour,dark?glm::vec3(.05F,0,.01F):glm::vec3(1,.08F,.14F),hack);
+      if(dark) n[i].emission*=1-.8F*hack;
+    }
+    for(int eye:{eyeL_,eyeR_}) { n[eye].colour=glm::mix(n[eye].colour,glm::vec3(1,.1F,.15F),hack); if(dark) n[eye].dimensions.y*=1-.7F*hack; }
+    n[head_].rotation+=glm::vec3(jitter(21),jitter(22),jitter(23))*.07F*hack;
+    n[body_].rotation+=glm::vec3(jitter(24),jitter(25),jitter(26))*.03F*hack;
+    n[antenna_].rotation.z+=jitter(27)*.4F*hack;
+  }
   if(p.health<=0||p.deathTime>0) {
     // Go limp, bending with the fall (the whole body topples in fallTransform).
     // Go limp and lie flat: arms relaxed along the sides, legs straight, head rolled aside.
@@ -388,7 +476,7 @@ glm::mat4 SceneModels::fallTransform(const Player& p) {
   // flip while the half turn away from the wall unwinds.
   glm::mat4 trick(1);
   if(const float t=trickPhase(p.motion);t>=0&&p.deathTime<=0) {
-    const float k=t*t*(3-2*t),turn=6.2831853F*k;
+    const float k=trickTurn(t),turn=6.2831853F*k;
     const glm::vec3 pivot(0,.62F*Game::modelScale,0),x(1,0,0),y(0,1,0),z(0,0,1);
     glm::mat4 r(1);
     switch(p.motion.trickKind) {
@@ -400,6 +488,11 @@ glm::mat4 SceneModels::fallTransform(const Player& p) {
       case 6: r=glm::rotate(glm::rotate(r,turn,y),.3F*std::sin(t*3.14159F),z); break;
       case 7: r=glm::rotate(glm::rotate(r,turn,y),-turn,x); break;
       case 8: r=glm::rotate(glm::rotate(r,3.14159F*(k-1),y),turn,x); break;
+      // Wall action: a laid-out back flip off a run (the half turn unwinding), a low aerial
+      // cartwheel off a slide, and a flight's flip turn (a forward roll with the half twist).
+      case 9: r=glm::rotate(glm::rotate(r,3.14159F*(k-1),y),turn,x); break;
+      case 10: r=glm::rotate(glm::rotate(r,3.14159F*(k-1),y),turn,z); break;
+      case 11: r=glm::rotate(glm::rotate(r,3.14159F*(k-1),y),-turn,x); break;
       default: break;
     }
     trick=glm::translate(glm::translate(glm::mat4(1),pivot)*r,-pivot);
@@ -429,7 +522,13 @@ glm::vec3 SceneModels::bodyScale(const Player& p) {
   const auto& a=p.motion;
   // Take-off squashes for two frames, then springs into a 12% stretch.
   // Slide drop-in: a quick squash.
-  const float slideIn=a.slideAge<1?curve(a.slideAge,{{0,0},{.05F,1},{.2F,0}})*.08F:0;
+  const float slideIn=a.slideAge<1?curve(a.slideAge,{{0,0},{.05F,1},{.2F,0}})*.08F*(1+.9F*std::clamp(a.surge,0.F,1.F)):0;
+  // Tricks: squash in the wind-up, stretch through the snap, squash on the plant. A pad's shove
+  // squashes the body then springs it long.
+  const float trickT=trickPhase(a),power=trickPower(p);
+  const float trickPop=trickT>=0?curve(trickT,{{0,0},{.08F,-1},{.3F,1},{.7F,0},{1,0}})*.07F*power:0;
+  const float trickPlanted=trickPlant(a)*.08F*power;
+  const float shove=a.boostAge<1?curve(a.boostAge,{{0,0},{.03F,-1},{.1F,1},{.25F,0}})*.08F:0;
   const float popStretch=a.popAge<1?curve(a.popAge,{{0,0},{.05F,1},{.22F,0}})*.07F:0;
   // Take-off squashes then stretches; a touchdown squashes.
   const float takeoff=a.takeoffAge<1?curve(a.takeoffAge,{{0,0},{.04F,-1},{.14F,1},{.3F,0}})*.1F:0;
@@ -442,11 +541,12 @@ glm::vec3 SceneModels::bodyScale(const Player& p) {
   // The run hop stretches the body at its top. Flight only adds a slight 4% stretch along the
   // tipped body; the hover height itself must not count, or the courier stretches to 2.5x.
   const float hop=runHop(p)/(.085F+.08F*p.sprintBlend+1e-4F),flightStretch=.04F*std::clamp(p.flightBlend,0.F,1.F);
-  const float y=1+launch+falling-land*(1-p.airBlend)-footfall-slideIn-bonk-touchdown+takeoff+popStretch+.06F*hop*hop+flightStretch,xz=1/std::sqrt(y);
+  const float y=1+launch+falling-land*(1-p.airBlend)-footfall-slideIn-bonk-touchdown+takeoff+popStretch+.06F*hop*hop+flightStretch+trickPop-trickPlanted+shove,xz=1/std::sqrt(y);
   // Blunt hits dent the shell along the blow for a moment.
   const float dent=a.hitAge<1?curve(a.hitAge,{{0,0},{.03F,1},{.12F,.4F},{.25F,0}})*(a.hitKind==0?1.F:.3F):0;
   // Beam-in: the body pops from nothing with a little overshoot.
-  const float appear=a.spawnAge<1?curve(a.spawnAge,{{0,0},{.16F,1.18F},{.28F,.94F},{.4F,1}}):1;
+  const float appear=(a.spawnAge<1?curve(a.spawnAge,{{0,0},{.16F,1.18F},{.28F,.94F},{.4F,1}}):1)
+    *(a.teleportAge<.45F?curve(a.teleportAge,{{0,.15F},{.14F,1.2F},{.26F,.93F},{.45F,1}}):1);  // a portal arrival pops in too
   return glm::vec3(xz*(1-.16F*dent*std::abs(a.hitSide)),y*(1+.05F*dent),xz*(1-.16F*dent*std::abs(a.hitForward)))*appear;
 }
 

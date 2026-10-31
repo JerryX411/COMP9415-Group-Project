@@ -83,18 +83,19 @@ int VoxelWorld::solidCount() const {
 
 Game::Game() { reset(0); }
 void Game::reset(int level) {
-  level_ = std::clamp(level, 0, tutorialLevel);
+  level_ = std::clamp(level, 0, practiceLevel);
   ++revision_;
   state_ = RunState::Playing;
   interactionIndex_ = -1; interactionCommitted_ = false;
   elapsed_ = gateOpen_ = sparkClock_ = 0.0F;
   hitStop_ = exhaustClock_ = 0.0F; lastWake_ = -1.0F; crouchToggle_ = false; slideClock_ = slideCooldown_ = 0;
   // Built-in layout anchors (a level file may replace them below).
-  room_ = tutorial() ? Bounds{{4, 1, 4}, {60, 4, 46}} : Bounds{{4, 1, 4}, {28, 4, 28}};
-  spawn_ = tutorial() ? glm::vec3(7, 1, 39) : glm::vec3(7, 1, 24);
-  gate_ = tutorial() ? glm::vec3(56, 1, 7) : glm::vec3(25, 1, 7);
+  room_ = tutorial() ? Bounds{{4, 1, 4}, {60, 4, 46}} : practice() ? Bounds{{4, 1, 4}, {60, 4, 60}} : Bounds{{4, 1, 4}, {28, 4, 28}};
+  spawn_ = tutorial() ? glm::vec3(7, 1, 39) : practice() ? glm::vec3(15.5F, 1, 53) : glm::vec3(7, 1, 24);
+  gate_ = tutorial() ? glm::vec3(8, 1, 7.5F) : practice() ? glm::vec3(30, 1, 6) : glm::vec3(25, 1, 7);  // practice: none shown
   spawnYaw_ = tutorial() ? -pi * .5F : 0.F;  // Training faces east down the first hall.
   remaining_ = startTime_ = level_ == 0 ? 150.0F : 180.0F;
+  wallHeight_ = 3;
   random_ = 0x52454c41 + unsigned(level_);
   player_ = Player{};
   player_.position = spawnPoint();
@@ -102,11 +103,14 @@ void Game::reset(int level) {
   particles_.fill(Particle{});
   cores_.clear(); traps_.clear(); switches_.clear(); movers_.clear(); checkpoints_.clear();
   respawnIndex_ = -1; respawnPending_ = false; lastHitSource_ = -1; sourceImmunity_ = graceTime_ = 0;
-  lives_ = livesPerLevel; tutorialStep_ = 0; tutorialAge_ = bounceTime_ = bounceCooldown_ = jetClock_ = boostTime_ = slideSurge_ = 0; resumeFlight_ = false; carrying_ = false; trailClock_ = 0; wallTouch_ = wallKick_ = 0; wallJumps_ = 0; pads_.clear(); plates_.clear(); doors_.clear(); pickups_.clear(); bonusAge_ = 10;
+  lives_ = livesPerLevel; tutorialStep_ = 0; tutorialAge_ = bounceTime_ = bounceCooldown_ = jetClock_ = boostTime_ = slideSurge_ = 0; resumeFlight_ = false; carrying_ = false; trailClock_ = 0; wallTouch_ = wallKick_ = 0; wallJumps_ = 0; wallJumpsDone_ = 0; pads_.clear(); plates_.clear(); doors_.clear(); pickups_.clear(); bonusAge_ = 10; drains_.clear(); drainCooldown_ = 0; penaltyAge_ = 10;
+  portals_.clear(); teleports_ = jetsUsed_ = 0; portalWait_ = 0; portalHold_ = -1; jetting_ = false; jetTrailClock_ = 0; lastSprintTap_ = -10; wallActionWait_ = 0; wallQueue_ = 0;
   world_.clear();
   buildShell();
   if (tutorial()) {
-    // Training ground: three halls in a snake, each teaching one system, ending at the exit.
+    // Training ground: three halls in a snake, each teaching one system. Hall 3 loops: the exit
+    // is at its near (west) end, locked until the last core, which sits on an upper floor at the
+    // far end; a one-way portal pair brings the courier back.
     // Hall 1 (south, heading east): move, sprint, jump the low barrier, crawl, slide the tunnel.
     world_.fill(26, 1, 32, 27, 2, 46, 3);                                         // low barrier
     world_.fill(34, 1, 32, 35, 3, 46, 2); world_.fill(34, 1, 37, 35, 2, 41, 0);   // crawl hole
@@ -116,21 +120,45 @@ void Game::reset(int level) {
     // then a pressure plate and speed pad for the blast door north.
     world_.fill(29, 1, 17, 33, 3, 21, 2); world_.fill(29, 1, 26, 33, 3, 30, 2);   // hazard gap
     world_.fill(4, 1, 15, 6, 3, 17, 2); world_.fill(10, 1, 15, 60, 3, 17, 2);     // hall 2 / hall 3, door at x 6..10
-    // Hall 3 (heading east): a relay-less trap to time or jump, the last core, a patrol, the exit.
-    cores_ = {{{56, 1.65F, 24}}, {{37, 1.65F, 23.5F}}, {{34, 1.65F, 9.5F}}};
+    // Hall 3 (heading east from the door): the exit gate and a portal at the door, a pad to fly
+    // the first trap, a jetpack to burst across a long second one, the wall-jump lane, spring
+    // boots, and an upper floor of two-high blocks (with a gap to jump) carrying the last core and
+    // the portal that leads back to the exit.
+    world_.fill(47, 1, 4, 53, 3, 8, 2); world_.fill(55, 1, 4, 60, 3, 9, 2);       // upper floor
+    cores_ = {{{56, 1.65F, 24}}, {{37, 1.65F, 23.5F}}, {{57.5F, 3.65F, 5.5F}}};
     traps_.push_back({{{40, 1.0F, 17}, {44, 1.1075F, 30}}, 0.0F, 0.0F});
     traps_.push_back({{{24, 1.0F, 4}, {28, 1.1075F, 15}}, 1.2F, 0.0F});
+    traps_.push_back({{{33, 1.0F, 4}, {43, 1.1075F, 15}}, 2.5F, 0.0F});  // jet across
     switches_.push_back({{47.5F, 1.0F, 21.F}, 0});
     checkpoints_ = {{{51.5F, 1, 27.5F}, {53.1F, 1, 27.5F}}, {{13.5F, 1, 9.5F}, {13.5F, 1, 11.1F}}};
     movers_.push_back({{31, 1.55F, 21.8F}, {31, 1.55F, 25.2F}, {}, {0.65F, 0.55F, 0.65F}, 3.2F, 0.0F});
-    movers_.push_back({{42, 1.55F, 6}, {42, 1.55F, 13}, {}, {0.65F, 0.55F, 0.65F}, 4.F, 1.F});
     doors_.push_back({{8, 2, 16}, {2, 1, .25F}, false});
     plates_.push_back({{16, 1, 26.5F}, 0});
     pads_.push_back({{{10.5F, 1, 19.5F}, {14.5F, 1.02F, 22}}, {-1, 0}});
     pads_.push_back({{{46, 1, 9}, {49, 1.02F, 11.5F}}, {1, 0}});
     pads_.push_back({{{19, 1, 8.5F}, {22, 1.02F, 11}}, {1, 0}});  // sprint onto it to fly over the trap
-    // Power-ups: a shield before the relay trap, spring boots before the last trap.
-    pickups_ = {{{49.5F, 1, 18.6F}, PowerUp::Shield}, {{16.5F, 1, 5.8F}, PowerUp::Spring}};
+    // Power-ups: a shield before the relay trap; in hall 2 a clock behind a crimson strip (in a
+    // mission one adds 30 s and the other costs 5 s; training has no clock, so they only show it);
+    // in hall 3 the jetpack before the long trap and spring boots below the upper floor.
+    pickups_ = {{{49.5F, 1, 18.6F}, PowerUp::Shield}, {{51.F, 1, 12.5F}, PowerUp::Spring}, {{22.5F, 1, 28.5F}, PowerUp::Time}, {{30.5F, 1, 9.75F}, PowerUp::Jet}};
+    drains_.push_back({{{20, 1, 26}, {25, 1.02F, 27.6F}}});
+    // The portals: one end on the upper floor beside the last core, the other just inside the door,
+    // in front of the exit gate.
+    portals_.push_back({{57.5F, 3, 7.6F}, {8, 1, 11.5F}});
+    // Hall 3's east wall past the last pad is the boosted wall-jump lesson.
+  } else if (practice()) {
+    // Practice field: one big open floor. Near the spawn every power-up waits in a row (two of
+    // each, one clock); along the east side a two-lane runway marked by low curbs, mostly plain
+    // floor with a few speed pads: north up the west lane, south down the east lane.
+    world_.fill(43, 1, 10, 44, 2, 28, 3); world_.fill(43, 1, 36, 44, 2, 54, 3);   // west curb, gap mid-way
+    world_.fill(51, 1, 12, 52, 2, 52, 3);                                         // lane divider
+    pads_.push_back({{{44.5F, 1, 44}, {50.5F, 1.02F, 46.5F}}, {0, -1}});
+    pads_.push_back({{{44.5F, 1, 30}, {50.5F, 1.02F, 32.5F}}, {0, -1}});
+    pads_.push_back({{{44.5F, 1, 16}, {50.5F, 1.02F, 18.5F}}, {0, -1}});
+    pads_.push_back({{{52.5F, 1, 20}, {59.5F, 1.02F, 22.5F}}, {0, 1}});
+    pads_.push_back({{{52.5F, 1, 40}, {59.5F, 1.02F, 42.5F}}, {0, 1}});
+    pickups_ = {{{8.F, 1, 47}, PowerUp::Spring}, {{10.5F, 1, 47}, PowerUp::Spring}, {{13.F, 1, 47}, PowerUp::Shield}, {{15.5F, 1, 47}, PowerUp::Shield},
+                {{18.F, 1, 47}, PowerUp::Jet}, {{20.5F, 1, 47}, PowerUp::Jet}, {{23.F, 1, 47}, PowerUp::Time}};
   } else if (level_ == 0) {
     world_.fill(10, 1, 19, 14, 2, 20, 3);
     world_.fill(19, 1, 20, 20, 3, 25, 2);
@@ -148,6 +176,9 @@ void Game::reset(int level) {
     pads_.push_back({{{25.2F, 1, 19}, {26.8F, 1.02F, 21.5F}}, {0, -1}});
     // The clock sits in the quiet south-east corner: a detour that buys 30 s.
     pickups_ = {{{12.5F, 1, 13.4F}, PowerUp::Shield}, {{6.F, 1, 6.5F}, PowerUp::Spring}, {{26.5F, 1, 25.5F}, PowerUp::Time}};
+    // Crimson tiles guard the clock from the west (clear of the door plate): jump them, go round by
+    // the north, or pay 5 s.
+    drains_.push_back({{{24, 1, 23}, {26, 1.02F, 28}}});
   } else {
     world_.fill(11, 1, 5, 12, 3, 17, 2);
     world_.fill(11, 1, 21, 12, 3, 27, 2);
@@ -170,10 +201,13 @@ void Game::reset(int level) {
     pads_.push_back({{{26.F, 1, 20.5F}, {27.6F, 1.02F, 23}}, {0, -1}});
     // The clock waits at the south end of the west corridor.
     pickups_ = {{{9.F, 1, 11.5F}, PowerUp::Shield}, {{16.F, 1, 6.5F}, PowerUp::Spring}, {{5.5F, 1, 25.5F}, PowerUp::Time}};
+    // A crimson strip across the middle hall, short of the south core.
+    drains_.push_back({{{12, 1, 21}, {16, 1.02F, 22}}});
     movers_.push_back({{14, 1.55F, 10.5F}, {19, 1.55F, 10.5F}, {}, {0.65F, 0.55F, 0.65F}, 4.8F, 0.0F});
     movers_.push_back({{23, 1.55F, 12}, {26, 1.55F, 19}, {}, {0.65F, 0.55F, 0.65F}, 6.0F, 1.2F});
   }
   std::string intro = tutorial() ? "Training: follow the green beacon. No time limit."
+                     : practice() ? "Practice field: power-ups return in 1 s."
                      : level_ == 0 ? "Collect 3 cores with E. Shift sprints. Avoid the hazards."
                                    : "Five cores. Two relays. Watch the moving hazards.";
   if (useLevelFiles) {
@@ -198,17 +232,18 @@ void Game::buildShell() {
   const auto r = room();
   const int x0 = int(r.min.x) - 1, x1 = int(r.max.x), z0 = int(r.min.z) - 1, z1 = int(r.max.z);
   world_.fill(x0, 0, z0, x1 + 1, 1, z1 + 1, 1);
-  world_.fill(x0, 1, z0, x0 + 1, 4, z1 + 1, 2);
-  world_.fill(x1, 1, z0, x1 + 1, 4, z1 + 1, 2);
-  world_.fill(x0, 1, z0, x1 + 1, 4, z0 + 1, 2);
-  world_.fill(x0, 1, z1, x1 + 1, 4, z1 + 1, 2);
+  const int top = 1 + wallHeight_;
+  world_.fill(x0, 1, z0, x0 + 1, top, z1 + 1, 2);
+  world_.fill(x1, 1, z0, x1 + 1, top, z1 + 1, 2);
+  world_.fill(x0, 1, z0, x1 + 1, top, z0 + 1, 2);
+  world_.fill(x0, 1, z1, x1 + 1, top, z1 + 1, 2);
 }
 LevelData Game::captureLevel() const {
   LevelData d;
-  d.name = tutorial() ? "Training" : level_ == 0 ? "Courtyard" : "Corridors";
+  d.name = tutorial() ? "Training" : practice() ? "Practice" : level_ == 0 ? "Courtyard" : "Corridors";
   d.message = message_;
   d.minX = int(room_.min.x); d.minZ = int(room_.min.z); d.maxX = int(room_.max.x); d.maxZ = int(room_.max.z);
-  d.time = startTime_;
+  d.time = startTime_; d.wall = wallHeight_;
   d.spawn = {spawn_.x, spawn_.z}; d.spawnYaw = spawnYaw_; d.gate = {gate_.x, gate_.z};
   // As many layers as the tallest structure inside the room needs (at least 3).
   d.height = LevelData::minHeight;
@@ -228,11 +263,14 @@ LevelData Game::captureLevel() const {
   for (const auto& p : plates_) d.plates.push_back({{p.position.x, p.position.z}, p.door});
   for (const auto& p : pads_) d.pads.push_back({{p.area.min.x, p.area.min.z}, {p.area.max.x, p.area.max.z}, p.direction});
   for (const auto& p : pickups_) d.pickups.push_back({{p.position.x, p.position.z}, int(p.kind)});
+  for (const auto& t : drains_) d.drains.push_back({{t.area.min.x, t.area.min.z}, {t.area.max.x, t.area.max.z}});
+  for (const auto& p : portals_) d.portals.push_back({{p.from.x, p.from.z}, {p.to.x, p.to.z}});
   return d;
 }
 void Game::applyLevel(const LevelData& d) {
   room_ = {{float(d.minX), 1, float(d.minZ)}, {float(d.maxX), 4, float(d.maxZ)}};
   spawn_ = {d.spawn.x, 1, d.spawn.y}; spawnYaw_ = d.spawnYaw; gate_ = {d.gate.x, 1, d.gate.y};
+  wallHeight_ = std::clamp(d.wall, LevelData::minHeight, LevelData::maxHeight);
   if (timed()) remaining_ = startTime_ = std::max(1.F, d.time);
   player_.position = spawn_; player_.yaw = spawnYaw_;
   world_.clear(); buildShell();
@@ -241,9 +279,11 @@ void Game::applyLevel(const LevelData& d) {
       for (int x = d.minX; x < d.maxX; ++x)
         if (const auto m = d.cell(x, y, z)) world_.set(x, y, z, m);
   cores_.clear(); traps_.clear(); switches_.clear(); checkpoints_.clear(); movers_.clear();
-  doors_.clear(); plates_.clear(); pads_.clear(); pickups_.clear();
-  // Heights are fixed per item type, as in the built-in levels.
-  for (const auto& c : d.cores) cores_.push_back({{c.x, 1.65F, c.y}});
+  doors_.clear(); plates_.clear(); pads_.clear(); pickups_.clear(); drains_.clear(); portals_.clear();
+  // Heights are fixed per item type, as in the built-in levels; cores, pickups and portals stand on
+  // top of whatever is built at their spot.
+  for (const auto& c : d.cores) cores_.push_back({{c.x, surfaceAt(c.x, c.y) + .65F, c.y}});
+  for (const auto& p : d.portals) portals_.push_back({{p.from.x, surfaceAt(p.from.x, p.from.y), p.from.y}, {p.to.x, surfaceAt(p.to.x, p.to.y), p.to.y}});
   for (const auto& t : d.traps) traps_.push_back({{{std::min(t.min.x, t.max.x), 1.0F, std::min(t.min.y, t.max.y)}, {std::max(t.min.x, t.max.x), 1.1075F, std::max(t.min.y, t.max.y)}}, t.offset, 0.0F});
   for (const auto& s : d.switches) switches_.push_back({{s.at.x, 1.0F, s.at.y}, s.trap});
   for (const auto& c : d.checkpoints) checkpoints_.push_back({{c.at.x, 1, c.at.y}, {c.respawn.x, 1, c.respawn.y}});
@@ -251,7 +291,8 @@ void Game::applyLevel(const LevelData& d) {
   for (const auto& o : d.doors) doors_.push_back({{o.at.x, 2, o.at.y}, o.alongZ ? glm::vec3(.25F, 1, o.halfWidth) : glm::vec3(o.halfWidth, 1, .25F), o.alongZ});
   for (const auto& p : d.plates) plates_.push_back({{p.at.x, 1, p.at.y}, p.door});
   for (const auto& p : d.pads) pads_.push_back({{{std::min(p.min.x, p.max.x), 1, std::min(p.min.y, p.max.y)}, {std::max(p.min.x, p.max.x), 1.02F, std::max(p.min.y, p.max.y)}}, glm::length(p.direction) > .01F ? glm::normalize(p.direction) : glm::vec2(1, 0)});
-  for (const auto& p : d.pickups) pickups_.push_back({{p.at.x, 1, p.at.y}, PowerUp(std::clamp(p.kind, 0, 2))});
+  for (const auto& p : d.pickups) pickups_.push_back({{p.at.x, surfaceAt(p.at.x, p.at.y), p.at.y}, PowerUp(std::clamp(p.kind, 0, 3))});
+  for (const auto& t : d.drains) drains_.push_back({{{std::min(t.min.x, t.max.x), 1, std::min(t.min.y, t.max.y)}, {std::max(t.min.x, t.max.x), 1.02F, std::max(t.min.y, t.max.y)}}});
   for (auto& h : movers_) {
     const float t = (1.0F - std::cos(h.offset * 2.0F * pi / h.period)) * 0.5F;
     h.position = glm::mix(h.start, h.end, t);
@@ -259,6 +300,12 @@ void Game::applyLevel(const LevelData& d) {
   ++revision_;  // The terrain changed: renderers rebuild their mesh.
 }
 
+float Game::surfaceAt(float x, float z) const {
+  const int cx = int(std::floor(x)), cz = int(std::floor(z));
+  int y = 1;
+  while (y < VoxelWorld::size - 2 && world_.cell(cx, y, cz)) ++y;
+  return float(y);
+}
 Bounds Game::playerBounds() const {
   return {player_.position + glm::vec3(-playerRadius, 0, -playerRadius),
           player_.position + glm::vec3(playerRadius, bodyHeight(), playerRadius)};
@@ -268,13 +315,13 @@ const std::vector<Bounds>& Game::fixtures() const {
   auto& boxes=fixtures_; boxes.clear();
   for(const auto& sw:switches_) boxes.push_back({sw.position+glm::vec3(-.375F,0,-.325F),sw.position+glm::vec3(.375F,1.05F,.325F)});
   const auto p=gatePosition();
-  for(float side:{-1.F,1.F}) {
+  if(!practice()) for(float side:{-1.F,1.F}) {  // the practice field has no exit
     const auto post=p+glm::vec3(side*1.5F,1.5F,0);
     boxes.push_back({post-glm::vec3(.2F,1.5F,.25F),post+glm::vec3(.2F,1.5F,.25F)});
     const auto door=p+glm::vec3(side*(.65F+gateOpen_*1.35F),1.35F,0);
     boxes.push_back({door-glm::vec3(.64F,1.35F,.23F),door+glm::vec3(.64F,1.35F,.23F)});
   }
-  boxes.push_back({p+glm::vec3(-1.7F,2.8F,-.25F),p+glm::vec3(1.7F,3.2F,.25F)});
+  if(!practice()) boxes.push_back({p+glm::vec3(-1.7F,2.8F,-.25F),p+glm::vec3(1.7F,3.2F,.25F)});
   for(const auto& d:doors_) for(const auto& panel:d.panels()) boxes.push_back(panel);
   // Checkpoint beacons are solid: the floor pad and the pylon with its lamp head.
   for(const auto& c:checkpoints_) {
@@ -485,19 +532,30 @@ void Game::step(float dt, const Input& input) {
   // Crouching at sprint speed slides instead (also on landing, if crouch was pressed in the
   // air); pressing crouch again mid-slide stands up and keeps the speed.
   const bool wasCrouching=player_.crouching;
+  // Jetpack: with a charge, a double tap of sprint while moving on the ground fires one burst (the
+  // first tap acts as a normal sprint press); mid-slide a single tap fires it, into a turbo slide.
+  // The firing tap is taken by the jet, so a slide carries on instead of standing up.
+  bool jetFired=false;
+  if(input.sprintPressed) {
+    const bool ready=player_.jets>0&&controlled&&player_.grounded&&player_.boost==Boost::None&&boostTime_<=0;
+    const bool second=elapsed_-lastSprintTap_<=doubleTap;
+    if(ready&&(player_.sliding||(second&&glm::length(player_.locomotion)>1.F))) { jetBurst(); jetFired=true; }
+    lastSprintTap_=jetFired?-10.F:elapsed_;
+  }
+  const bool sprintEdge=input.sprintPressed&&!jetFired;
   // Boost transitions: sprint from a stride takes off into a flight; crouch from a flight dives
   // into a slide that keeps its speed (handled by startSlide); a hit ends either.
   // An interaction pauses a flight (it lifts off again afterwards); a hit just knocks it down.
   // Either way the flight clock keeps running.
   if(player_.boost==Boost::Flight&&busy) resumeFlight_=true;
   if(player_.boost!=Boost::None&&!controlled) endBoost(false);
-  if(input.sprintPressed&&player_.boost==Boost::Stride&&controlled&&player_.grounded&&!player_.crouching) {
+  if(sprintEdge&&player_.boost==Boost::Stride&&controlled&&player_.grounded&&!player_.crouching) {
     const float v=glm::length(player_.locomotion);
     startFlight(v>.1F?player_.locomotion/v:glm::vec2(-std::sin(player_.yaw),-std::cos(player_.yaw)),std::max(v+3.F,flightTakeoff),boostTime_<=0);
     startTrick(3);
   }
   // Sprint pressed mid-slide cancels it straight into a run (it stands only with headroom).
-  if(input.sprintPressed&&player_.sliding&&controlled) crouchToggle_=false;
+  if(sprintEdge&&player_.sliding&&controlled) crouchToggle_=false;
   if(input.crouchPressed&&controlled) crouchToggle_=player_.sliding?false:!crouchToggle_;
   if((input.crouchHeld||crouchToggle_)&&controlled&&player_.grounded&&!player_.sliding&&glm::length(player_.locomotion)>slideStartSpeed) startSlide();
   if(input.sprintHeld&&glm::length(movement)>.05F&&player_.grounded&&!player_.sliding) crouchToggle_=false;
@@ -505,11 +563,11 @@ void Game::step(float dt, const Input& input) {
   else if(player_.crouching) standUp();
   if(!player_.crouching||!controlled||!player_.grounded) player_.sliding=false;
   // Standing out of a slide pops straight into the stride.
-  if(wasCrouching&&!player_.crouching&&player_.slideBlend>.25F&&player_.grounded&&!input.jumpPressed&&player_.jumpBuffer<=0) popUp(input.sprintPressed);
+  if(wasCrouching&&!player_.crouching&&player_.slideBlend>.25F&&player_.grounded&&!input.jumpPressed&&player_.jumpBuffer<=0) popUp(sprintEdge);
   // While the flight clock runs, the end of an interaction or a fresh sprint press takes off
   // again (with the take-off move) without restarting the clock.
   if(boostTime_<=0) resumeFlight_=false;
-  if(player_.boost==Boost::None&&boostTime_>0&&controlled&&player_.grounded&&!player_.crouching&&(resumeFlight_||input.sprintPressed)) {
+  if(player_.boost==Boost::None&&boostTime_>0&&controlled&&player_.grounded&&!player_.crouching&&(resumeFlight_||sprintEdge)) {
     const float v=glm::length(player_.locomotion);
     const glm::vec2 heading=glm::length(movement)>.05F?glm::normalize(movement):v>.5F?player_.locomotion/v:glm::vec2(-std::sin(player_.yaw),-std::cos(player_.yaw));
     startFlight(heading,std::max(v,flightTakeoff),false); resumeFlight_=false;
@@ -633,6 +691,14 @@ void Game::step(float dt, const Input& input) {
   const bool boosted=boostTime_>0||player_.boost!=Boost::None;
   // Boosted, a jump just after meeting a wall kicks off it (on the ground or in the air).
   if(player_.jumpBuffer>0&&wallTouch_>0&&boosted&&controlled&&!player_.crouching&&wallJumps_<wallJumpsPerAir) wallJump();
+  wallActionWait_=std::max(0.F,wallActionWait_-dt);
+  if(input.wallPressed&&controlled&&wallActionWait_<=0) wallAction();
+  if(wallQueue_>0) {
+    // A pressed wall action on its way: fires as soon as that wall is within reach.
+    wallQueue_=controlled?std::max(0.F,wallQueue_-dt):0.F;
+    glm::vec2 n; glm::vec3 point; float distance=0;
+    if(wallQueue_>0&&findWall(wallHeading(),wallReach,n,point,distance)&&glm::dot(n,wallQueueNormal_)>.9F) wallActionAt(n,point);
+  }
   // A jump from a crouch first stands up; under a low ceiling it is refused.
   const bool fromSlide=player_.sliding||(player_.crouching&&player_.slideBlend>.4F);
   if(player_.jumpBuffer>0&&player_.coyoteTime>0&&controlled&&player_.crouching) { crouchToggle_=false; standUp(); }
@@ -679,6 +745,7 @@ void Game::step(float dt, const Input& input) {
   player_.grounded=false; moveAxis(1,player_.velocity.y*dt);
   updateDevices(dt);
   updatePickups(dt);
+  updatePortals(dt);
 
   const Bounds body=playerBounds();
   for(std::size_t i=0;i<traps_.size();++i)
@@ -689,6 +756,19 @@ void Game::step(float dt, const Input& input) {
   slideEffects(dt);
   speedTrail(dt);
   boostEffects(dt);
+  // While a jet burst's boost runs: yellow sparks and motes streaming back off the pack.
+  if(boostTime_<=0||state_!=RunState::Playing) jetting_=false;
+  if(jetting_) {
+    jetTrailClock_+=dt;
+    const float v=glm::length(player_.locomotion);
+    const glm::vec2 dir=v>.1F?player_.locomotion/v:glm::vec2(-std::sin(player_.yaw),-std::cos(player_.yaw));
+    const glm::vec3 ahead(dir.x,0,dir.y),pack=player_.position+glm::vec3(0,.9F,0)-ahead*.35F;
+    while(jetTrailClock_>.025F) {
+      jetTrailClock_-=.025F;
+      sparks(pack,-ahead+glm::vec3(0,-.3F,0),{1,.85F,.3F},2,7.F,.5F);
+      if(auto* p=spawn(ParticleKind::Glow,pack+glm::vec3(random01()-.5F,random01()*.6F-.3F,random01()-.5F)*.5F,-ahead*(3.F+3.F*random01()),{1,.9F,.35F},.3F,.06F)) p->drag=3;
+    }
+  } else jetTrailClock_=0;
   {
     // Skids: braking hard or pivoting at speed scrapes dust (and sparks at sprint speed) from both boots.
     const auto& m=player_.motion;
@@ -785,7 +865,7 @@ void Game::updateAnimation(float dt,glm::vec3 previous,float turn) {
   player_.strideBlend=blend(player_.strideBlend,player_.boost==Boost::Stride?1.F:0.F,10.F);
   player_.flightBlend=blend(player_.flightBlend,player_.boost==Boost::Flight?1.F:0.F,player_.boost==Boost::Flight?9.F:12.F);
   auto& a=player_.motion;
-  for(float* age:{&a.startAge,&a.stopAge,&a.pivotAge,&a.launchAge,&a.landAge,&a.celebrateAge,&a.stepAge,&a.hitAge,&a.shockAge,&a.spawnAge,&a.slideAge,&a.popAge,&a.boostAge,&a.bounceAge,&a.takeoffAge,&a.touchAge,&a.pickupAge,&a.shieldBreakAge,&a.trickAge}) *age=std::min(10.F,*age+dt);
+  for(float* age:{&a.startAge,&a.stopAge,&a.pivotAge,&a.launchAge,&a.landAge,&a.celebrateAge,&a.stepAge,&a.hitAge,&a.shockAge,&a.spawnAge,&a.slideAge,&a.popAge,&a.boostAge,&a.bounceAge,&a.takeoffAge,&a.touchAge,&a.pickupAge,&a.shieldBreakAge,&a.trickAge,&a.hackAge,&a.jetAge,&a.teleportAge,&a.pushAge}) *age=std::min(10.F,*age+dt);
   a.idleFor=motion<.04F&&player_.grounded&&player_.interactionTime<=0&&player_.hitStun<=0?a.idleFor+dt:0;
   const float actualSpeed=travelled/dt;
   const float acceleration=std::clamp((actualSpeed-a.lastSpeed)/dt,-90.F,65.F);
@@ -987,7 +1067,7 @@ float Game::shadowHeight() const {
 }
 int Game::liveParticleCount() const { return int(std::count_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.remaining > 0; })); }
 bool Game::gateUnlocked() const { return !cores_.empty() && collectedCount() == int(cores_.size()); }
-const char* Game::nameOf(int level) { return level == tutorialLevel ? "TRAINING GROUNDS" : level == 0 ? "COURTYARD" : "RELAY CORRIDORS"; }
+const char* Game::nameOf(int level) { return level == tutorialLevel ? "TRAINING GROUNDS" : level == practiceLevel ? "PRACTICE FIELD" : level == 0 ? "COURTYARD" : "RELAY CORRIDORS"; }
 void Game::startSlide() {
   const float v=glm::length(player_.locomotion);
   const glm::vec2 dir=player_.locomotion/v;
@@ -1074,6 +1154,20 @@ std::array<Bounds,2> BlastDoor::panels() const {
   a.min[axis]-=shift; a.max[axis]-=shift; b.min[axis]+=shift; b.max[axis]+=shift;
   return {a,b};
 }
+void Game::drainBite() {
+  if(timed()) remaining_=std::max(0.F,remaining_-drainPenalty);
+  penaltyAge_=0; player_.motion.hackAge=0;
+  notify(timed() ? "Crimson tile: -5 seconds." : "Crimson tile: in a mission this costs 5 seconds.");
+  // A crimson flare: a ring and red sparks at the feet, and dark-red motes torn up off the
+  // courier like seconds draining away.
+  const auto feet=player_.position+glm::vec3(0,.05F,0);
+  shockwave(feet,{1,.15F,.2F},1.4F,.3F);
+  sparks(feet,{0,1,0},{1,.25F,.25F},12,5.F,1.F);
+  for(int i=0;i<10;++i) {
+    const float a=float(i)*.628F;
+    if(auto* p=spawn(ParticleKind::Glow,feet+glm::vec3(std::cos(a)*.4F,.1F,std::sin(a)*.4F),{std::cos(a)*.6F,2.4F,std::sin(a)*.6F},{.9F,.08F,.15F},.7F,.08F)) { p->drag=1.5F; p->gravity=-.4F; }
+  }
+}
 void Game::popUp(bool sprintCancel) {
   // Spring out of a slide into the stride: a sprint cancel keeps at least sprint speed, extra
   // speed carries, and the lead (right) foot lands first so the legs flow out of the skid.
@@ -1093,6 +1187,16 @@ void Game::popUp(bool sprintCancel) {
 }
 void Game::updateDevices(float dt) {
   const glm::vec2 feet(player_.position.x,player_.position.z);
+  // Crimson tiles: standing on one (on the floor, not flying over it) costs drainPenalty seconds
+  // at once, then again every drainInterval while the courier stays on crimson.
+  drainCooldown_=std::max(0.F,drainCooldown_-dt); penaltyAge_=std::min(10.F,penaltyAge_+dt);
+  for(auto& tile:drains_) tile.flash=std::max(0.F,tile.flash-dt*2.F);
+  if(state_==RunState::Playing&&player_.grounded&&player_.boost!=Boost::Flight&&player_.position.y<1.3F)
+    for(auto& tile:drains_)
+      if(feet.x>tile.area.min.x&&feet.x<tile.area.max.x&&feet.y>tile.area.min.z&&feet.y<tile.area.max.z) {
+        if(drainCooldown_<=0) { drainCooldown_=drainInterval; tile.flash=1; drainBite(); }
+        break;
+      }
   // Speed pads: entering one launches the courier along its arrow (a slide keeps sliding, faster).
   for(auto& pad:pads_) {
     pad.flash=std::max(0.F,pad.flash-dt*2.5F);
@@ -1231,41 +1335,85 @@ void Game::speedTrail(float dt) {
     if(auto* p=spawn(ParticleKind::Ray,player_.position+glm::vec3(0,.3F+.8F*random01(),0)+side*(random01()-.5F)*.9F,{},{.75F,.92F,1},.12F,.03F)) p->extent=behind*1.6F;
   }
 }
+// Training course, step by step (hall 1 heads east, hall 2 west, hall 3 east to the exit). Each
+// step completes on its action or once the courier is past that part of the course. An edited
+// training map may lack an item a step points at: that step then counts as done.
 bool Game::tutorialStepDone(int step) const {
-  // Each step completes on its action or once the courier is past that part of the course.
   const auto p=player_.position;
+  const bool hall3=p.z<15.F;
+  const auto core=[&](std::size_t i) { return i>=cores_.size()||cores_[i].collected; };
+  const auto pickupGone=[&](PowerUp kind) {
+    for(const auto& item:pickups_) if(item.kind==kind) return item.taken||item.respawn>0;
+    return true;
+  };
   switch(step) {
-    case 0: return glm::distance(glm::vec2(p.x,p.z),glm::vec2(spawnPoint().x,spawnPoint().z))>3.F;
-    case 1: return p.x>22.F||p.z<30.F;
-    case 2: return p.x>27.6F||p.z<30.F;
-    case 3: return p.x>35.6F||p.z<30.F;
-    case 4: return p.x>52.5F||p.z<30.F;
-    case 5: return cores_[0].collected;
-    case 6: return checkpoints_[0].active||p.x<45.F||p.z<15.F;
-    case 7: return cores_[1].collected;
-    case 8: return (p.x<28.5F&&p.z>17.F)||p.z<15.F;
-    case 9: return plates_[0].down||p.z<15.F;
-    case 10: return p.z<14.5F;
-    case 11: return cores_[2].collected;
+    case 0: return glm::distance(glm::vec2(p.x,p.z),glm::vec2(spawnPoint().x,spawnPoint().z))>3.F;  // move
+    case 1: return p.x>22.F||p.z<30.F;                                                              // sprint
+    case 2: return p.x>27.6F||p.z<30.F;                                                             // jump the barrier
+    case 3: return p.x>35.6F||p.z<30.F;                                                             // crawl
+    case 4: return p.x>52.5F||p.z<30.F;                                                             // slide the tunnel
+    case 5: return core(0);
+    case 6: return checkpoints_.empty()||checkpoints_[0].active||p.x<45.F||hall3;                   // checkpoint
+    case 7: return player_.shielded||pickupGone(PowerUp::Shield)||p.x<44.5F||hall3;                // shield
+    case 8: return traps_.empty()||traps_[0].disabledFor>0||p.x<39.5F||hall3;                      // relay
+    case 9: return core(1);
+    case 10: return (p.x<28.5F&&p.z>17.F)||hall3;                                                   // hazard gap
+    case 11: return pickupGone(PowerUp::Time)||p.x<19.F||hall3;                                     // clock / crimson
+    case 12: return plates_.empty()||plates_[0].down||hall3;                                        // plate
+    case 13: return p.z<14.5F;                                                                      // door, by the pad
+    case 14: return portals_.empty()||portals_[0].toOn;                                             // the exit-side portal
+    case 15: return hall3&&p.x>29.F;                                                                // fly over the trap
+    case 16: return player_.jets>0||jetsUsed_>0||pickupGone(PowerUp::Jet)||(hall3&&p.x>44.F);       // jetpack
+    case 17: return (jetsUsed_>0&&hall3&&p.x>43.5F)||(hall3&&p.x>50.F);                             // jet across the long trap
+    case 18: return wallJumpsDone_>0||core(2);                                                      // wall jump
+    case 19: return player_.spring>0||p.y>2.5F||core(2);                                            // spring boots
+    case 20: return (hall3&&p.y>2.5F)||core(2);                                                     // up to the upper floor
+    case 21: return core(2);
+    case 22: return portals_.empty()||portals_[0].linked();                                         // link the portals
+    case 23: return portals_.empty()||teleports_>0;                                                 // take the portal
     default: return false;
   }
 }
 glm::vec3 Game::tutorialTarget() const {
+  const auto coreAt=[&](std::size_t i) { return i<cores_.size()?glm::vec3(cores_[i].position.x,cores_[i].position.y-.65F,cores_[i].position.z):gatePosition(); };
+  const auto pickupAt=[&](PowerUp kind,glm::vec3 fallback) { for(const auto& item:pickups_) if(item.kind==kind) return item.position; return fallback; };
+  const auto portalAt=[&](bool from) { return portals_.empty()?gatePosition():from?portals_[0].from:portals_[0].to; };
   switch(tutorialStep_) {
     case 0: return {16,1,39};
     case 1: return {24,1,39};
     case 2: return {27,1,39};
     case 3: return {34.5F,1,39};
     case 4: return {48,1,39};
-    case 5: return {cores_[0].position.x,1,cores_[0].position.z};
-    case 6: return checkpoints_[0].position;
-    case 7: return {cores_[1].position.x,1,cores_[1].position.z};
-    case 8: return {31,1,23.5F};
-    case 9: return plates_[0].position;
-    case 10: return {doors_[0].centre.x,1,doors_[0].centre.z};
-    case 11: return {cores_[2].position.x,1,cores_[2].position.z};
+    case 5: return coreAt(0);
+    case 6: return checkpoints_.empty()?gatePosition():checkpoints_[0].position;
+    case 7: return pickupAt(PowerUp::Shield,{49.5F,1,18.6F});
+    case 8: return switches_.empty()?glm::vec3(47.5F,1,21):switches_[0].position;
+    case 9: return coreAt(1);
+    case 10: return {31,1,23.5F};
+    case 11: return pickupAt(PowerUp::Time,{22.5F,1,28.5F});
+    case 12: return plates_.empty()?glm::vec3(16,1,26.5F):plates_[0].position;
+    case 13: return doors_.empty()?glm::vec3(8,1,16):glm::vec3(doors_[0].centre.x,1,doors_[0].centre.z);
+    case 14: return portalAt(false);
+    case 15: return {20.5F,1,9.75F};
+    case 16: return pickupAt(PowerUp::Jet,{30.5F,1,9.75F});
+    case 17: return {45,1,9.75F};
+    case 18: return {59,1,10.25F};
+    case 19: return pickupAt(PowerUp::Spring,{51,1,12.5F});
+    case 20: return {50,3,6};
+    case 21: return coreAt(2);
+    case 22: case 23: return portalAt(true);
     default: return gatePosition();
   }
+}
+const char* Game::tutorialHint() const {
+  static const char* hints[tutorialSteps]{
+    "MOVE", "SPRINT", "JUMP THE BARRIER", "CROUCH UNDER", "SLIDE THROUGH", "RECOVER CORE",
+    "ACTIVATE CHECKPOINT", "SHIELD: BLOCKS ONE HIT", "RELAY: DISABLE THE TRAP", "RECOVER CORE",
+    "DODGE THE HAZARD", "CLOCK +30S / CRIMSON -5S", "STAND ON THE PLATE", "SPEED PAD: BEAT THE DOOR",
+    "ACTIVATE THE PORTAL", "SPRINT ONTO THE PAD: FLY", "JETPACK", "DOUBLE-TAP SPRINT: JET",
+    "PAD, THEN JUMP AT THE WALL", "SPRING BOOTS", "SPRING UP TO THE UPPER FLOOR", "RECOVER CORE",
+    "ACTIVATE ITS PAIR", "STEP IN: SHORTCUT TO THE EXIT", "EXIT"};
+  return hints[std::clamp(tutorialStep_,0,tutorialSteps-1)];
 }
 void Game::updateTutorial(float dt) {
   if(!tutorial()) return;
@@ -1286,6 +1434,9 @@ void Game::startTrick(int kind) {
   // A short, readable trick marks the switch between moves (see CourierPose.cpp). A ring of
   // light motes whips around the body in the trick's direction and a small ring snaps out.
   auto& m=player_.motion; m.trickKind=kind; m.trickAge=0;
+  // Boosted tricks freeze the frame for an instant (presentation only: main drains hitStop) so
+  // the switch lands with weight.
+  if(kind==5||kind==7||(kind==2&&boostTime_>0)) hitStop_=std::max(hitStop_,.04F);
   const glm::vec3 chest=player_.position+glm::vec3(0,.7F,0),forward(-std::sin(player_.yaw),0,-std::cos(player_.yaw)),side(std::cos(player_.yaw),0,-std::sin(player_.yaw));
   for(int i=0;i<12;++i) {
     const float a=float(i)*.5236F;
@@ -1309,7 +1460,7 @@ void Game::wallJump() {
   const float apex=jumpSpeed*jumpSpeed/(2*gravity),room=groundY_+apex+.25F-player_.position.y;
   player_.velocity.y=std::max(3.F,std::sqrt(2*gravity*std::max(0.F,room)));
   player_.grounded=false; carrying_=true; bounceTime_=0; bounceCooldown_=.3F;
-  wallTouch_=0; wallKick_=wallKickLock; ++wallJumps_;
+  wallTouch_=0; wallKick_=wallKickLock; ++wallJumps_; ++wallJumpsDone_;
   if(player_.boost==Boost::Flight) endBoost(false);
   player_.jumpBuffer=player_.coyoteTime=0;
   player_.jumpActive=true; player_.jumpAge=0; player_.jumpCutQueued=false;
@@ -1318,6 +1469,87 @@ void Game::wallJump() {
   auto& m=player_.motion; m.yawVelocity=0; m.launchAge=0;
   startTrick(8);
   hitStop_=std::max(hitStop_,.05F);
+  wallImpact(out,wallPoint_);
+}
+bool Game::findWall(glm::vec2 direction,float reach,glm::vec2& normal,glm::vec3& point,float& distance) const {
+  // Walls are voxel faces, so look along the axis the heading leans on, if it leans on it at
+  // wallAngle or more: march the body forward (lifted off the floor so the floor never counts)
+  // until it would touch something, up to reach.
+  const glm::vec3 feet=player_.position+glm::vec3(0,.15F,0);
+  for(int axis=0;axis<2;++axis) {
+    const float d=axis==0?direction.x:direction.y;
+    if(std::abs(d)<wallAngle) continue;
+    const float side=d>0?1.F:-1.F;
+    for(float step=.1F;step<=reach+1e-4F;step+=.1F) {
+      glm::vec3 probe=feet; probe[axis==0?0:2]+=side*step;
+      if(!blockedPlayer(probe)) continue;
+      normal=axis==0?glm::vec2(-side,0):glm::vec2(0,-side); distance=step;
+      point=player_.position+glm::vec3(axis==0?side*(playerRadius+step-.1F):0.F,.9F,axis==1?side*(playerRadius+step-.1F):0.F);
+      return true;
+    }
+  }
+  return false;
+}
+glm::vec2 Game::wallHeading() const {
+  // Ahead: the way the courier moves, or faces when still.
+  const float v=glm::length(player_.locomotion);
+  return v>.8F?player_.locomotion/v:glm::vec2(-std::sin(player_.yaw),-std::cos(player_.yaw));
+}
+void Game::wallAction() {
+  // The wall action (left mouse): fire now if the wall is within reach, else wait for the courier
+  // to get there (as long as it is heading in fast enough to arrive within wallBuffer).
+  glm::vec2 n; glm::vec3 point; float distance=0;
+  if(!findWall(wallHeading(),wallTrigger,n,point,distance)) return;
+  if(distance<=wallReach) { wallActionAt(n,point); return; }
+  const float approach=-glm::dot(player_.locomotion,n);
+  if(approach<1.F) return;
+  wallQueue_=std::min(wallBuffer,(distance-wallReach)/approach+.12F); wallQueueNormal_=n;
+}
+void Game::wallActionAt(glm::vec2 n,glm::vec3 point) {
+  const float v=glm::length(player_.locomotion);
+  wallQueue_=0;
+  const bool flying=player_.boost==Boost::Flight,sliding=player_.sliding,airborne=!player_.grounded&&!flying;
+  const bool running=player_.grounded&&!sliding&&(player_.sprinting||v>sprintSpeed*.8F);
+  wallActionWait_=wallActionCooldown;
+  auto& m=player_.motion;
+  if(!flying&&!sliding&&!airborne&&!running) {
+    // Walking or standing: both palms shove off the wall and the courier is pushed back, still
+    // facing it.
+    player_.locomotion=n*wallShove; player_.yaw=std::atan2(n.x,n.y); m.yawVelocity=0; m.pushAge=0;
+    wallKick_=.2F; hitStop_=std::max(hitStop_,.03F);
+    dust(point-glm::vec3(0,.5F,0),6,1.2F,.12F);
+    for(float side:{-1.F,1.F}) flash(point-glm::vec3(n.x,0,n.y)*.02F+glm::vec3(-n.y,0,n.x)*(.22F*side)+glm::vec3(0,.2F,0),{.7F,.9F,1},.35F,.1F);
+    shockwave(point,{.6F,.85F,1},.7F,.2F);
+    return;
+  }
+  if(airborne&&wallJumps_>=wallJumpsPerAir) return;
+  // Kick: mirror the motion off the wall at the same speed (at least a kick's worth), making sure
+  // it heads well away from the wall, and turn to face the new way.
+  // wallRebound times the arrival speed (from at least a kick's worth), capped.
+  const float speed=std::min(wallReboundMax,wallRebound*std::max(v,flying?flightTakeoff*.5F:running?sprintSpeed:sliding?slideStartSpeed:wallKickSpeed*.6F));
+  glm::vec2 out=v>.1F?player_.locomotion-2*glm::dot(player_.locomotion,n)*n:n;
+  if(glm::dot(out,n)<.55F*glm::length(out)) { const glm::vec2 along=out-glm::dot(out,n)*n; out=n*.8F+along*.6F/std::max(.001F,glm::length(out)); }
+  out=glm::normalize(out)*speed;
+  player_.locomotion=out; player_.yaw=std::atan2(-out.x/speed,-out.y/speed); m.yawVelocity=0;
+  carrying_=true; wallKick_=wallKickLock; ++wallJumpsDone_; bounceTime_=0; bounceCooldown_=.3F;
+  // Snap off the wall at once (swept, so it stops at anything behind).
+  if(std::abs(n.x)>.5F) moveAxis(0,n.x*wallSnap); else moveAxis(2,n.y*wallSnap);
+  // Each state leaves the wall its own way: a jump kicks into the back flip with a hop; a sprint
+  // runs a step up and lays out a high back flip; a slide springs up off the wall into a low
+  // aerial; a flight stays a flight and flip-turns.
+  int trick=8; float hop=1.25F;
+  if(flying) { trick=11; hop=0; }
+  else if(sliding) { trick=10; hop=.95F; player_.sliding=false; crouchToggle_=false; standUp(); }
+  else if(running) { trick=9; hop=1.85F; }
+  if(hop>0) {
+    player_.velocity.y=std::max(player_.velocity.y,std::sqrt(2*gravity*hop)); player_.grounded=false;
+    player_.jumpActive=false; player_.jumpBuffer=player_.coyoteTime=0; m.launchAge=0; ++wallJumps_;
+  }
+  startTrick(trick);
+  hitStop_=std::max(hitStop_,running?.065F:.05F);
+  wallImpact(n,point);
+}
+void Game::wallImpact(glm::vec2 out,glm::vec3 point) {
   // Impact on the wall: a ring of light motes flung out across the wall face, a spray of
   // sparks and chips off it, a flash and a small shell, boot flames stamped into the wall and
   // dust shaken down from the contact.
@@ -1325,20 +1557,20 @@ void Game::wallJump() {
   for(int i=0;i<14;++i) {
     const float a=float(i)*.4488F;
     const glm::vec3 radial=up*std::cos(a)+across*std::sin(a);
-    if(auto* p=spawn(ParticleKind::Glow,wallPoint_+radial*.15F+n*.05F,radial*4.5F+n*1.2F,i%2?glm::vec3(.85F,.95F,1):glm::vec3(.45F,.85F,1),.35F,.08F)) p->drag=4;
+    if(auto* p=spawn(ParticleKind::Glow,point+radial*.15F+n*.05F,radial*4.5F+n*1.2F,i%2?glm::vec3(.85F,.95F,1):glm::vec3(.45F,.85F,1),.35F,.08F)) p->drag=4;
   }
-  sparks(wallPoint_,n+up*.35F,{.75F,.92F,1},14,7.F,1.2F);
-  sparks(wallPoint_,n+up*.2F,{1,.8F,.5F},6,5.F,1.F);
-  burst(wallPoint_,{.55F,.57F,.58F},5,1.6F);
-  dust(wallPoint_-up*.35F,8,1.6F,.14F);
-  flash(wallPoint_+n*.1F,{.6F,.85F,1},1.1F,.12F);
-  if(auto* p=spawn(ParticleKind::Shell,wallPoint_+n*.08F,{},{.55F,.88F,1},.2F,.1F)) p->growth=.9F;
+  sparks(point,n+up*.35F,{.75F,.92F,1},14,7.F,1.2F);
+  sparks(point,n+up*.2F,{1,.8F,.5F},6,5.F,1.F);
+  burst(point,{.55F,.57F,.58F},5,1.6F);
+  dust(point-up*.35F,8,1.6F,.14F);
+  flash(point+n*.1F,{.6F,.85F,1},1.1F,.12F);
+  if(auto* p=spawn(ParticleKind::Shell,point+n*.08F,{},{.55F,.88F,1},.2F,.1F)) p->growth=.9F;
   for(bool right:{false,true}) {
     const glm::vec3 foot=footPosition(right)+glm::vec3(0,.08F,0)-n*.15F;
     if(auto* p=spawn(ParticleKind::Fireball,foot,-n*2.5F,{.35F,.75F,1},.22F,.1F)) { p->growth=4.F; p->drag=5; }
     if(auto* p=spawn(ParticleKind::Glow,foot,-n*1.5F,{.5F,.88F,1},.24F,.26F)) p->drag=6;
   }
-  for(int i=0;i<6;++i) { const float a=float(i)*1.0472F+random01()*.5F; if(auto* p=spawn(ParticleKind::Ray,wallPoint_,{},{.75F,.92F,1},.16F,.04F)) p->extent=glm::normalize(n*.3F+up*std::cos(a)+across*std::sin(a))*1.2F; }
+  for(int i=0;i<6;++i) { const float a=float(i)*1.0472F+random01()*.5F; if(auto* p=spawn(ParticleKind::Ray,point,{},{.75F,.92F,1},.16F,.04F)) p->extent=glm::normalize(n*.3F+up*std::cos(a)+across*std::sin(a))*1.2F; }
 }
 void Game::startFlight(glm::vec2 direction,float speed,bool refresh) {
   // Take-off: a crouch-and-spring into the hover, boot jets lighting, a bright double ring.
@@ -1364,7 +1596,7 @@ void Game::endBoost(bool touchdown) {
   player_.boost=Boost::None;
   if(!flying||!touchdown) return;
   // Touchdown: the boots come down into a landing dip with a dust skirt and a fading ring.
-  auto& m=player_.motion; m.touchAge=0; m.landAge=0; m.landStrength=.7F;
+  auto& m=player_.motion; m.touchAge=0; m.landAge=0; m.landStrength=.9F;
   const auto feet=player_.position+glm::vec3(0,.04F,0);
   dust(feet,12,2.F,.14F); shockwave(feet,{.55F,.75F,1},1.2F,.25F); shockwave(feet,{.75F,.55F,1},2.F,.32F);
   for(int i=0;i<10;++i) { const float a=float(i)*.628F; sparks(feet+glm::vec3(0,.05F,0),{std::cos(a),.25F,std::sin(a)},i%2?glm::vec3(.72F,.5F,1):glm::vec3(.5F,.9F,1),1,5.F,.4F); }
@@ -1463,22 +1695,24 @@ void Game::updatePickups(float dt) {
     }
     const glm::vec2 offset(player_.position.x-item.position.x,player_.position.z-item.position.z);
     if(glm::length(offset)>pickupRadius||std::abs(player_.position.y-item.position.y)>1.6F) continue;
-    player_.motion.pickupAge=0;
+    player_.motion.pickupAge=0; player_.motion.pickupKind=int(item.kind);
     const glm::vec3 colour=pickupColour(item.kind),at=item.position+glm::vec3(0,.9F,0);
     if(item.kind==PowerUp::Time) {
       // The clock: +30 s on the countdown, once. A gold ring of motes climbs around the courier
       // like a clock face winding up, with a double ring at the feet.
-      item.taken=true; bonusAge_=0;
+      if(practice()) item.respawn=pickupRespawnTime(); else item.taken=true;  // the practice field's comes back too
+      bonusAge_=0;
       if(timed()) remaining_+=timeBonus;
-      notify("Clock: +30 seconds on the countdown.");
+      notify(timed() ? "Clock: +30 seconds on the countdown." : "Clock: in a mission this adds 30 seconds.");
       for(int i=0;i<12;++i) {
         const float a=float(i)*.5236F;
         if(auto* p=spawn(ParticleKind::Glow,player_.position+glm::vec3(std::cos(a)*.7F,.2F,std::sin(a)*.7F),{-std::sin(a)*2.F,3.F,std::cos(a)*2.F},i%3==0?glm::vec3(1,.95F,.8F):colour,.8F,.09F)) { p->drag=1.5F; p->gravity=-.5F; }
       }
       shockwave(player_.position+glm::vec3(0,.05F,0),{1,.95F,.75F},1.1F,.25F);
     } else {
-      item.respawn=pickupRespawn;
+      item.respawn=pickupRespawnTime();
       if(item.kind==PowerUp::Shield) { player_.shielded=true; notify("Shield: blocks the next hit."); }
+      else if(item.kind==PowerUp::Jet) { player_.jets=1; notify("Jetpack: double-tap sprint, or tap it mid-slide."); }
       else { player_.spring=springTime; notify("Spring boots: jumps go much higher for 12 seconds."); }
     }
     // Take: a flash, a pillar, a ring and a spiral of motes pulled into the courier.
@@ -1497,7 +1731,7 @@ void Game::standUp() {
   player_.crouching = false;
   if (blockedPlayer(player_.position)) player_.crouching = true;
 }
-void Game::warpPlayer(glm::vec3 feet) { player_.position = feet; player_.motion=CourierMotion{}; player_.velocity = glm::vec3(0); player_.locomotion={0,0}; player_.coyoteTime=player_.jumpBuffer=0; player_.jumpActive=player_.jumpCutQueued=false; player_.moveBlend=player_.sprintBlend=player_.airBlend=player_.landingBlend=player_.hitBlend=player_.turnLean=0; player_.knockback={0,0}; player_.hitStun=0; player_.interactionTime=0; player_.interaction=Interaction::None; player_.grounded = false; player_.crouching=false; player_.crouchBlend=0; bounceTime_=0; player_.boost=Boost::None; player_.strideBlend=player_.flightBlend=0; boostTime_=0; resumeFlight_=false; wallTouch_=wallKick_=0; wallJumps_=0; }
+void Game::warpPlayer(glm::vec3 feet) { player_.position = feet; player_.motion=CourierMotion{}; player_.velocity = glm::vec3(0); player_.locomotion={0,0}; player_.coyoteTime=player_.jumpBuffer=0; player_.jumpActive=player_.jumpCutQueued=false; player_.moveBlend=player_.sprintBlend=player_.airBlend=player_.landingBlend=player_.hitBlend=player_.turnLean=0; player_.knockback={0,0}; player_.hitStun=0; player_.interactionTime=0; player_.interaction=Interaction::None; player_.grounded = false; player_.crouching=false; player_.crouchBlend=0; bounceTime_=0; player_.boost=Boost::None; player_.strideBlend=player_.flightBlend=0; boostTime_=0; resumeFlight_=false; wallTouch_=wallKick_=0; wallJumps_=0; wallQueue_=0; }
 void Game::setTimeForDebug(float seconds) { remaining_ = std::max(0.0F, seconds); }
 void Game::notify(std::string message) { message_ = std::move(message); messageTime_ = 3.5F; }
 void Game::applyDamage(glm::vec3 source,int sourceId,bool launch,DamageKind kind) {
@@ -1519,9 +1753,21 @@ void Game::applyDamage(glm::vec3 source,int sourceId,bool launch,DamageKind kind
       const glm::vec3 out(std::cos(a) * r, std::abs(u), std::sin(a) * r);
       if (auto* p = spawn(ParticleKind::Debris, chest + out * .8F, out * (3.F + 3.F * random01()), {.55F, .92F, 1}, .7F, .09F)) p->growth = .1F;
     }
-    sparks(chest, {0, .5F, 0}, {.6F, .95F, 1}, 14, 6.F, 1.4F);
+    // Shards of the bubble: glowing glass plates flung off its surface (harder away from the
+    // blow), tumbling down to bounce and lie scattered on the floor for a moment before fading.
+    for (int i = 0; i < 24; ++i) {
+      const float u = random01() * 1.6F - .6F, a = random01() * 6.2831853F, r = std::sqrt(std::max(0.F, 1 - u * u));
+      const glm::vec3 out(std::cos(a) * r, u, std::sin(a) * r);
+      const glm::vec3 velocity = out * (2.5F + 3.5F * random01()) + away * 2.F + glm::vec3(0, 2.5F + 2.F * random01(), 0);
+      if (auto* p = spawn(ParticleKind::Debris, chest + out * .85F, velocity, i % 4 == 0 ? glm::vec3(.85F, .97F, 1) : glm::vec3(.45F, .9F, 1), 1.6F + .8F * random01(), .07F + .07F * random01())) {
+        p->extent = {1, 0, 0}; p->gravity = 9.F; p->drag = .6F;
+      }
+    }
+    sparks(chest, {0, .5F, 0}, {.6F, .95F, 1}, 22, 7.F, 1.4F);
     shockwave(player_.position + glm::vec3(0, .04F, 0), {.5F, .95F, 1}, 2.F, .3F);
-    hitStop_ = std::max(hitStop_, .05F);
+    shockwave(player_.position + glm::vec3(0, .06F, 0), {.85F, .97F, 1}, 3.F, .4F);
+    flash(chest, {.8F, .97F, 1}, 2.6F, .1F);
+    hitStop_ = std::max(hitStop_, .08F);
     notify("Shield absorbed the hit.");
     return;
   }
@@ -1613,6 +1859,91 @@ void Game::beginDeath() {
   hitStop_=std::max(hitStop_,.12F);
   notify(player_.health<=0?"Courier destroyed. Five impacts exhausted the armour.":"Power depleted. Courier shutting down.");
 }
+int Game::nearestPortal() const {
+  float closest=1.6F; int result=-1;
+  for(std::size_t i=0;i<portals_.size();++i) for(int end=0;end<2;++end) {
+    const auto& link=portals_[i];
+    if(end==0?link.fromOn:link.toOn) continue;
+    const glm::vec3 d=player_.position-(end==0?link.from:link.to);
+    const float distance=glm::length(glm::vec2(d.x,d.z));
+    if(distance<closest&&std::abs(d.y)<1.F) { closest=distance; result=int(i)*2+end; }
+  }
+  return result;
+}
+glm::vec3 Game::portalEnd(int code) const { const auto& link=portals_.at(std::size_t(code/2)); return code%2==0?link.from:link.to; }
+void Game::activatePortal(int code) {
+  auto& link=portals_.at(std::size_t(code/2));
+  const bool from=code%2==0; (from?link.fromOn:link.toOn)=true; link.pulse=1;
+  const glm::vec3 at=from?link.from:link.to,colour=link.linked()?glm::vec3(.35F,1,.85F):glm::vec3(1,.7F,.25F);
+  // Waking: a ring and a column of light, sparks spiralling up; linking also lights the far end.
+  shockwave(at+glm::vec3(0,.05F,0),colour,1.6F,.35F); pillar(at,colour,.6F);
+  flash(at+glm::vec3(0,.4F,0),colour,1.2F,.16F);
+  for(int i=0;i<14;++i) { const float a=float(i)*.4488F; if(auto* p=spawn(ParticleKind::Glow,at+glm::vec3(std::cos(a)*.6F,.1F,std::sin(a)*.6F),{-std::sin(a)*2.F,2.6F,std::cos(a)*2.F},colour,.7F,.08F)) { p->drag=2; p->gravity=-.6F; } }
+  if(link.linked()) {
+    const glm::vec3 other=from?link.to:link.from;
+    shockwave(other+glm::vec3(0,.05F,0),colour,1.6F,.35F); pillar(other,colour,.6F);
+    notify("Portals linked. Step into either one to cross to the other.");
+  } else notify("Portal online. Activate its pair to link them.");
+  hitStop_=std::max(hitStop_,.05F);
+}
+void Game::updatePortals(float dt) {
+  portalWait_=std::max(0.F,portalWait_-dt);
+  for(auto& link:portals_) link.pulse=std::max(0.F,link.pulse-dt*1.5F);
+  const auto reach=[&](glm::vec3 at,float radius) { const glm::vec3 d=player_.position-at; return glm::length(glm::vec2(d.x,d.z))<=radius&&std::abs(d.y)<=.5F; };
+  // The end just arrived at wakes again once the courier has stepped off it.
+  if(portalHold_>=0&&(std::size_t(portalHold_/2)>=portals_.size()||!reach(portalEnd(portalHold_),portalRadius+.4F))) portalHold_=-1;
+  if(state_!=RunState::Playing||portalWait_>0||player_.hitStun>0||player_.interactionTime>0) return;
+  for(std::size_t i=0;i<portals_.size();++i) {
+    auto& link=portals_[i];
+    if(!link.linked()) continue;
+    int end=-1;
+    for(int e=0;e<2&&end<0;++e) if(int(i)*2+e!=portalHold_&&reach(e==0?link.from:link.to,portalRadius)) end=e;
+    if(end<0) continue;
+    const glm::vec3 departure=end==0?link.from:link.to,arrival=end==0?link.to:link.from;
+    // Jump: the courier is pulled into the disc in a swirl of light and pops out of its pair.
+    for(const auto& [at,colour]:{std::pair{departure,glm::vec3(.35F,1,.85F)},std::pair{arrival,glm::vec3(.5F,.95F,1)}}) {
+      shockwave(at+glm::vec3(0,.05F,0),colour,1.8F,.35F); pillar(at,colour,.5F);
+      flash(at+glm::vec3(0,.8F,0),colour,1.6F,.18F);
+      for(int i=0;i<16;++i) { const float a=float(i)*.3927F; if(auto* p=spawn(ParticleKind::Glow,at+glm::vec3(std::cos(a)*.9F,.2F+.1F*float(i%4),std::sin(a)*.9F),{-std::cos(a)*1.5F-std::sin(a)*2.F,1.8F,-std::sin(a)*1.5F+std::cos(a)*2.F},colour,.6F,.08F)) { p->drag=2.5F; p->gravity=-.4F; } }
+    }
+    if(player_.boost!=Boost::None) endBoost(false);
+    player_.position=arrival; player_.velocity=glm::vec3(0); player_.locomotion*=.2F; player_.knockback={0,0};
+    player_.grounded=true; player_.jumpActive=false; player_.coyoteTime=player_.jumpBuffer=0;
+    player_.motion.teleportAge=0; link.pulse=1; portalWait_=portalCooldown; portalHold_=int(i)*2+(1-end); ++teleports_;
+    ++revision_;  // Snaps the follow camera to the new position.
+    hitStop_=std::max(hitStop_,.06F);
+    break;
+  }
+}
+void Game::jetBurst() {
+  // Jetpack: one burst, then the charge is spent. A run is thrown forward into a boosted stride at
+  // jetSpeed or more; a slide becomes a turbo slide. The boost clock then runs as after a pad.
+  player_.jets=std::max(0,player_.jets-1); ++jetsUsed_;
+  const float v=glm::length(player_.locomotion);
+  const glm::vec2 dir=v>.1F?player_.locomotion/v:glm::vec2(-std::sin(player_.yaw),-std::cos(player_.yaw));
+  auto& m=player_.motion; m.jetAge=0; m.boostAge=0; carrying_=true; boostTime_=boostDuration; jetting_=true;
+  if(player_.sliding) { player_.locomotion=dir*std::max(v+5.F,padSpeed+slidePadBonus); slideSurge_=slideSurgeLength_=padSurgeTime; m.boostKind=2; m.surge=1; }
+  else { player_.locomotion=dir*std::max(v+5.F,jetSpeed); player_.boost=Boost::Stride; m.boostKind=0; m.popAge=0; }
+  hitStop_=std::max(hitStop_,.06F);
+  // Ignition: two flame tongues and sparks blasting back from the pack, a smoke wake, a ring at
+  // the feet and a flash.
+  const glm::vec3 ahead(dir.x,0,dir.y),across(-dir.y,0,dir.x),pack=player_.position+glm::vec3(0,1.F,0)-ahead*.35F,feet=player_.position+glm::vec3(0,.05F,0);
+  for(float side:{-1.F,1.F}) {
+    const glm::vec3 nozzle=pack+across*(.13F*side)-glm::vec3(0,.2F,0);
+    if(auto* p=spawn(ParticleKind::Fireball,nozzle,-ahead*5.F-glm::vec3(0,1.F,0),{1,.55F,.2F},.32F,.14F)) { p->growth=5.F; p->drag=4; }
+    if(auto* p=spawn(ParticleKind::Fireball,nozzle,-ahead*3.F,{.5F,.85F,1},.2F,.08F)) { p->growth=3.F; p->drag=5; }
+    sparks(nozzle,-ahead+glm::vec3(0,-.2F,0),{1,.7F,.35F},10,9.F,.7F);
+  }
+  for(int i=0;i<8;++i) smokePuff(pack-ahead*.3F,-ahead*(2.F+2.F*random01())+across*(random01()-.5F)*2.F+glm::vec3(0,.4F,0),.18F,.9F);
+  shockwave(feet,{1,.65F,.3F},1.8F,.3F); dust(feet,10,2.4F,.14F);
+  flash(pack,{1,.75F,.4F},1.4F,.14F);
+  // A huge yellow ring blasting out across the floor (two, the outer one slower), a yellow shell
+  // round the courier, a big yellow flash and yellow rays.
+  shockwave(feet,{1,.86F,.22F},7.F,.55F); shockwave(feet,{1,.95F,.6F},4.2F,.35F);
+  if(auto* p=spawn(ParticleKind::Shell,player_.position+glm::vec3(0,.8F,0),{},{1,.88F,.3F},.3F,.2F)) p->growth=2.6F;
+  flash(player_.position+glm::vec3(0,.8F,0),{1,.9F,.35F},3.2F,.16F);
+  for(int i=0;i<10;++i) { const float a=float(i)*.628F; if(auto* p=spawn(ParticleKind::Ray,feet+glm::vec3(0,.3F,0),{},{1,.9F,.35F},.2F,.05F)) p->extent=glm::vec3(std::cos(a),.12F,std::sin(a))*2.4F; }
+}
 int Game::nearestCore() const {
   float closest=1.8F; int result=-1;
   const auto reach=player_.position+glm::vec3(0,.9F,0);
@@ -1632,6 +1963,7 @@ Interaction Game::availableInteraction() const {
   if(core>=0) consider(Interaction::Core,core,cores_[std::size_t(core)].position);
   if(sw>=0) consider(Interaction::Switch,sw,switches_[std::size_t(sw)].position+glm::vec3(0,.9F,0));
   if(cp>=0) consider(Interaction::Checkpoint,cp,checkpoints_[std::size_t(cp)].position+glm::vec3(0,.9F,0));
+  if(const int portal=nearestPortal();portal>=0) consider(Interaction::Portal,portal,portalEnd(portal)+glm::vec3(0,.9F,0));
   return best;
 }
 void Game::updateInteraction(float dt,bool pressed) {
@@ -1671,15 +2003,18 @@ void Game::updateInteraction(float dt,bool pressed) {
         notify("Relay active: linked floor trap safe for 5 seconds.");
       } else if(player_.interaction==Interaction::Checkpoint && interactionIndex_>=0) {
         activateCheckpoint(std::size_t(interactionIndex_));
+      } else if(player_.interaction==Interaction::Portal && interactionIndex_>=0) {
+        activatePortal(interactionIndex_);
       }
     }
     if(player_.interactionTime<=0) player_.interaction=Interaction::None;
   }
   if(!pressed || player_.interactionTime>0 || player_.hitStun>0) return;
   const auto kind=availableInteraction(); if(kind==Interaction::None) return;
-  interactionIndex_=kind==Interaction::Core?nearestCore():kind==Interaction::Switch?nearestSwitch():nearestCheckpoint();
+  interactionIndex_=kind==Interaction::Core?nearestCore():kind==Interaction::Switch?nearestSwitch():kind==Interaction::Portal?nearestPortal():nearestCheckpoint();
   player_.interactionTarget=kind==Interaction::Core?cores_[std::size_t(interactionIndex_)].position
     :kind==Interaction::Switch?switches_[std::size_t(interactionIndex_)].position+glm::vec3(0,1,0)
+    :kind==Interaction::Portal?portalEnd(interactionIndex_)+glm::vec3(0,.3F,0)
     :checkpoints_[std::size_t(interactionIndex_)].position+glm::vec3(0,1.1F,0);
   player_.interaction=kind; player_.interactionTime=duration; interactionCommitted_=false;
 }

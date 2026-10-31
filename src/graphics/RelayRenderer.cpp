@@ -288,7 +288,10 @@ void Renderer::gatherLights(const Game& game) {
   if(game.gateUnlocked()) add(game.gatePosition()+glm::vec3(0,1.5F,-.6F),3.5F,{.35F,1,.88F},.6F);
   for(const auto& checkpoint:game.checkpoints()) add(checkpoint.position+glm::vec3(0,1.2F,0),checkpoint.active?3.F:1.8F,checkpoint.active?glm::vec3(.35F,1,.9F):glm::vec3(1,.6F,.15F),checkpoint.active?.7F:.25F);
   for(const auto& pad:game.speedPads()) if(pad.flash>.05F) add((pad.area.min+pad.area.max)*.5F+glm::vec3(0,.4F,0),3.5F,{.45F,.85F,1},1.6F*pad.flash);
+  for(const auto& tile:game.drainTiles()) add((tile.area.min+tile.area.max)*.5F+glm::vec3(0,.4F,0),2.6F,{.8F,.06F,.1F},.35F*crimsonFlicker(game.elapsed(),tile.area.min.x+tile.area.min.z)+1.4F*tile.flash);
   for(const auto& item:game.pickups()) if(item.respawn<=0&&!item.taken) add(item.position+glm::vec3(0,.9F,0),2.2F,pickupColour(item.kind),.5F);
+  for(const auto& link:game.portals()) for(int end=0;end<2;++end) if(end==0?link.fromOn:link.toOn)
+    add((end==0?link.from:link.to)+glm::vec3(0,.5F,0),2.4F,link.linked()?glm::vec3(.35F,1,.9F):glm::vec3(1,.62F,.2F),.45F+1.2F*link.pulse);
   for(const auto& door:game.doors()) add(door.centre+glm::vec3(0,.8F,0),2.4F,door.hold>0?glm::vec3(.35F,1,.9F):glm::vec3(1,.3F,.15F),.35F);
   std::sort(lights.begin(),lights.end(),[](const Light& a,const Light& b) { return a.weight>b.weight; });
   lightCount_=std::min<int>(maxLights,int(lights.size()));

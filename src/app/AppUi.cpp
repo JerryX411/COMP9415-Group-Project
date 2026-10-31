@@ -11,6 +11,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "graphics/Window.h"
+#include "graphics/OpenGL.h"
 #include "core/AssetPath.h"
 #include "app/RelayMenu.h"
 #include "core/KeyBindings.h"
@@ -21,16 +22,15 @@ namespace craft::app {
 AppUi::AppUi(graphics::Window& window) {
   IMGUI_CHECKVERSION(); ImGui::CreateContext(); ImGui::StyleColorsDark();
   ImGui::GetIO().IniFilename=nullptr;
-  const auto body=craft::core::assetPath("fonts/Rajdhani-SemiBold.ttf");
-  auto* fonts=ImGui::GetIO().Fonts; fonts->AddFontFromFileTTF(body.string().c_str(),22.F);
-  // Display face: Agency FB Bold is read from the Windows font folder at run time
-  // (not redistributed with the project); elsewhere the bundled Rajdhani is used.
-  std::filesystem::path displayFace=body;
+  // One rounded face for everything: Arial Rounded MT Bold is read from the Windows font folder at
+  // run time (not redistributed with the project); elsewhere the bundled Rajdhani is used.
+  std::filesystem::path face=craft::core::assetPath("fonts/Rajdhani-SemiBold.ttf");
   if(const char* windows=std::getenv("WINDIR")) {
-    const auto agency=std::filesystem::path(windows)/"Fonts"/"AGENCYB.TTF";
-    std::error_code error; if(std::filesystem::exists(agency,error)) displayFace=agency;
+    const auto rounded=std::filesystem::path(windows)/"Fonts"/"ARLRDBD.TTF";
+    std::error_code error; if(std::filesystem::exists(rounded,error)) face=rounded;
   }
-  relay::setDisplayFont(fonts->AddFontFromFileTTF(displayFace.string().c_str(),22.F));
+  auto* fonts=ImGui::GetIO().Fonts;
+  relay::setDisplayFont(fonts->AddFontFromFileTTF(face.string().c_str(),22.F));
   auto& s=ImGui::GetStyle(); s.WindowRounding=2; s.FrameRounding=2; s.WindowPadding={18,14};
   s.Colors[ImGuiCol_WindowBg]={.016F,.063F,.118F,.92F}; s.Colors[ImGuiCol_Border]={0,.88F,1,.45F};
   s.Colors[ImGuiCol_Text]={.84F,.97F,1,1}; s.Colors[ImGuiCol_Separator]={0,.88F,1,.35F};
@@ -41,14 +41,48 @@ AppUi::AppUi(graphics::Window& window) {
   if(!ImGui_ImplGlfw_InitForOpenGL(window.nativeHandle(),true)) { ImGui::DestroyContext(); throw std::runtime_error("ImGui GLFW initialization failed"); }
   if(!ImGui_ImplOpenGL3_Init("#version 330 core")) { ImGui_ImplGlfw_Shutdown(); ImGui::DestroyContext(); throw std::runtime_error("ImGui OpenGL initialization failed"); }
 }
-AppUi::~AppUi() { ImGui_ImplOpenGL3_Shutdown(); ImGui_ImplGlfw_Shutdown(); ImGui::DestroyContext(); }
+AppUi::~AppUi() {
+  if(backdropFbo_[0]) { glDeleteFramebuffers(4,backdropFbo_); glDeleteTextures(4,backdropTex_); }
+  ImGui_ImplOpenGL3_Shutdown(); ImGui_ImplGlfw_Shutdown(); ImGui::DestroyContext();
+}
 void AppUi::beginFrame() {
   ImGui_ImplOpenGL3_NewFrame(); ImGui_ImplGlfw_NewFrame(); ImGui::NewFrame();
   const auto size=ImGui::GetIO().DisplaySize;
   const float scale=std::min(size.x/1440.F,size.y/900.F);
   if(scale>0&&scale!=prewarmedScale_) { relay::prewarmFonts(scale); prewarmedScale_=scale; }
 }
-void AppUi::render() { ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); }
+void AppUi::render() { ImGui::Render(); captureBackdrop(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); }
+void AppUi::captureBackdrop() {
+  // Acrylic: the frame so far (the 3D scene, before any UI) is halved four times with linear
+  // filtering; the sixteenth-size copy, magnified back with linear filtering, reads as a soft blur.
+  const auto& io=ImGui::GetIO();
+  const int width=int(io.DisplaySize.x*io.DisplayFramebufferScale.x),height=int(io.DisplaySize.y*io.DisplayFramebufferScale.y);
+  if(width<32||height<32) return;
+  GLint read=0,draw=0,texture=0;
+  glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING,&read); glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING,&draw); glGetIntegerv(GL_TEXTURE_BINDING_2D,&texture);
+  if(width!=backdropWidth_||height!=backdropHeight_) {
+    if(backdropFbo_[0]) { glDeleteFramebuffers(4,backdropFbo_); glDeleteTextures(4,backdropTex_); }
+    glGenFramebuffers(4,backdropFbo_); glGenTextures(4,backdropTex_);
+    for(int i=0;i<4;++i) {
+      glBindTexture(GL_TEXTURE_2D,backdropTex_[i]);
+      glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,std::max(1,width>>(i+1)),std::max(1,height>>(i+1)),0,GL_RGBA,GL_UNSIGNED_BYTE,nullptr);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+      glBindFramebuffer(GL_DRAW_FRAMEBUFFER,backdropFbo_[i]);
+      glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER,GL_COLOR_ATTACHMENT0,GL_TEXTURE_2D,backdropTex_[i],0);
+    }
+    backdropWidth_=width; backdropHeight_=height;
+  }
+  GLuint source=GLuint(draw); int w=width,h=height;
+  for(int i=0;i<4;++i) {
+    const int nw=std::max(1,width>>(i+1)),nh=std::max(1,height>>(i+1));
+    glBindFramebuffer(GL_READ_FRAMEBUFFER,source); glBindFramebuffer(GL_DRAW_FRAMEBUFFER,backdropFbo_[i]);
+    glBlitFramebuffer(0,0,w,h,0,0,nw,nh,GL_COLOR_BUFFER_BIT,GL_LINEAR);
+    source=backdropFbo_[i]; w=nw; h=nh;
+  }
+  glBindFramebuffer(GL_READ_FRAMEBUFFER,GLuint(read)); glBindFramebuffer(GL_DRAW_FRAMEBUFFER,GLuint(draw)); glBindTexture(GL_TEXTURE_2D,GLuint(texture));
+  relay::setBackdrop(ImTextureID(backdropTex_[3]));
+}
 bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::RenderOptions& options, const relay::Renderer& renderer, bool focused) {
   const auto display=ImGui::GetIO().DisplaySize;
   constexpr auto fixed=ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoSavedSettings;
@@ -105,12 +139,54 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
         for(int i=0;i<36;++i) {
           const float a=hash(deal*3.1F+float(i)*1.7F)*6.2831853F,start=r*(.58F+.25F*hash(deal*5.3F+float(i))),len=r*(.08F+.22F*hash(deal*7.9F+float(i)))*rush;
           const ImVec2 p0(c.x+std::cos(a)*start,c.y+std::sin(a)*start),p1(c.x+std::cos(a)*(start+len),c.y+std::sin(a)*(start+len));
-          hud->AddLine(p0,p1,withAlpha(i%4==0?IM_COL32(176,150,255,255):ice,(.12F+.22F*hash(deal+float(i)*9.1F))*rush),(1.F+2.F*hash(deal*2.3F+float(i)))*s);
+          const ImU32 streak=game.jetting()?(i%3==0?IM_COL32(255,240,170,255):IM_COL32(255,205,60,255)):i%4==0?IM_COL32(176,150,255,255):ice;
+          hud->AddLine(p0,p1,withAlpha(streak,(.12F+.22F*hash(deal+float(i)*9.1F))*rush*(game.jetting()?1.4F:1.F)),(1.F+2.F*hash(deal*2.3F+float(i)))*s);
         }
       }
       if(player.flightBlend>.01F) edges(IM_COL32(150,110,255,255),.16F*player.flightBlend,.13F);
     }
     if(player.motion.celebrateAge<.6F) edges(mint,.35F*(1-player.motion.celebrateAge/.6F),.16F);
+    // A crimson tile taking time: a short crimson pulse at the edges, and the screen is "hacked"
+    // for a moment: a few red and black glitch slices torn sideways, columns of red hex code on
+    // black strips and a corrupted error block, re-dealt ten times a second (kept soft and slow
+    // enough not to strobe) and thinning out as it fades.
+    if(game.timePenaltyAge()<.45F) edges(IM_COL32(220,20,45,255),.22F*(1-game.timePenaltyAge()/.45F),.12F);
+    if(game.timePenaltyAge()<.7F&&game.state()==relay::RunState::Playing) {
+      const float age=game.timePenaltyAge(),fade=1-age/.7F,deal=std::floor(float(ImGui::GetTime())*10.F);
+      const auto hash=[](float n) { const float h=std::sin(n*12.9898F)*43758.5453F; return h-std::floor(h); };
+      const ImU32 red=IM_COL32(255,36,60,255),black=IM_COL32(0,0,0,255);
+      for(int i=0;i<5;++i) {
+        if(hash(deal*1.3F+float(i))>.3F+.7F*fade) continue;
+        const float y=hash(deal*7.F+float(i)*3.F)*display.y,h=(3+22*hash(deal*13.F+float(i)))*s,shift=(hash(deal*5.F+float(i))-.5F)*80*s;
+        hud->AddRectFilled({shift,y},{display.x+shift,y+h},withAlpha(i%2?red:black,(i%2?.16F:.25F)*fade));
+      }
+      const char* digits="0123456789ABCDEF";
+      for(int c=0;c<5;++c) {
+        if(hash(deal*2.1F+float(c)*9.F)>.4F+.6F*fade) continue;
+        const float x=hash(float(c)*17.3F+std::floor(deal/6.F))*display.x,y0=hash(float(c)*5.9F+std::floor(deal/6.F))*display.y*.7F;
+        const int rows=5+int(9*hash(float(c)*3.3F));
+        for(int r=0;r<rows;++r) {
+          char line[16];
+          const auto byte=[&](int k) { return digits[int(hash(deal*.7F+float(c*31+r*7+k))*16)%16]; };
+          std::snprintf(line,sizeof(line),r%4==0?"0x%c%c%c%c":"%c%c %c%c",byte(0),byte(1),byte(2),byte(3));
+          const float ry=y0+float(r)*20*s,w=relay::drawTracked(nullptr,16*s,{},0,line,2*s);
+          hud->AddRectFilled({x-4*s,ry-1*s},{x+w+4*s,ry+19*s},withAlpha(black,.35F*fade));
+          relay::drawTracked(hud,16*s,{x,ry},withAlpha(r==rows-1?IM_COL32(255,255,255,255):red,fade*(.35F+.3F*hash(deal+float(c*13+r)))),line,2*s);
+        }
+      }
+      for(int i=0;i<1;++i) {
+        if(hash(deal*3.9F+float(i)*11.F)>.5F*fade+.15F) continue;
+        const ImVec2 a(hash(deal*4.4F+float(i))*display.x*.8F,hash(deal*6.6F+float(i))*display.y*.8F),b(a.x+(60+120*hash(deal+float(i)*2.F))*s,a.y+(16+30*hash(deal*9.F+float(i)))*s);
+        hud->AddRectFilled(a,b,withAlpha(red,.3F*fade));
+        for(float yy=a.y+4*s;yy<b.y-3*s;yy+=6*s) hud->AddRectFilled({a.x+4*s,yy},{a.x+4*s+(b.x-a.x-8*s)*hash(yy+deal),yy+2.5F*s},withAlpha(black,.5F*fade));
+      }
+    }
+    if(player.motion.shieldBreakAge<.35F) edges(ice,.32F*(1-player.motion.shieldBreakAge/.35F),.12F);
+    // A portal jump: a bright cyan-white flash that clears in a moment (it also hides the cut).
+    if(player.motion.teleportAge<.35F) { const float k=1-player.motion.teleportAge/.35F; hud->AddRectFilled({0,0},display,withAlpha(IM_COL32(210,250,255,255),.6F*k*k)); edges(glowCyan,.4F*k,.2F); }
+    // Jetpack: a big yellow flash at ignition, then the edges shimmer yellow while the boost runs.
+    if(player.motion.jetAge<.25F) { const float k=1-player.motion.jetAge/.25F; hud->AddRectFilled({0,0},display,withAlpha(IM_COL32(255,230,120,255),.28F*k*k)); edges(IM_COL32(255,200,50,255),.45F*k,.18F); }
+    else if(game.jetting()) edges(IM_COL32(255,205,60,255),.13F+.07F*std::sin(t*41.F),.14F);
     if(player.motion.landAge<.25F&&player.motion.landStrength>1.1F) edges(ice,.25F*(1-player.motion.landAge/.25F),.12F);
     if(game.state()==relay::RunState::Lost) {
       if(player.deathTime<.3F) hud->AddRectFilled({0,0},display,withAlpha(IM_COL32(255,240,220,255),.55F*(1-player.deathTime/.3F)));
@@ -129,59 +205,150 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
       hud->AddCircle(c,11*s,colour,20,2*s);
       for(float e:{-1.F,1.F}) hud->AddRectFilled({c.x+e*4.5F*s-2*s,c.y-3*s},{c.x+e*4.5F*s+2*s,c.y+3*s},colour);
     };
-    const ImVec2 pa(22*s,20*s),pb(pa.x+262*s,pa.y+98*s);
-    // No backing or frame: the icons sit straight on the scene (with soft shadows).
+    const ImVec2 pa(22*s,20*s);
+    const int statusStart=hud->VtxBuffer.Size;
+    // No backing: armour, lives, the shield and the jetpack sit straight on the scene.
     {
-      // Armour: a small shield outline, then five slanted cells; the lost cell flashes red.
+      // Armour: a small shield outline, then five slanted cells in recessed slots. A full cell glows
+      // cyan (amber at two cells, red at one, pulsing) with a soft bloom and a bright top edge. A hit
+      // breaks the lost cell like a struck card: it punches out red with a twist, shards fly off it,
+      // and the row shakes.
+      const float hitAge=player.hurtCooldown>0&&player.health<5?1.1F-player.hurtCooldown:10.F;
+      const int rowStart=hud->VtxBuffer.Size;
       const ImVec2 c(pa.x+34*s,pa.y+32*s);
       const ImVec2 outline[5]{{c.x-8*s,c.y-9*s},{c.x+8*s,c.y-9*s},{c.x+8*s,c.y+1*s},{c.x,c.y+10*s},{c.x-8*s,c.y+1*s}};
-      hud->AddPolyline(outline,5,withAlpha(steel,.9F),ImDrawFlags_Closed,2*s);
+      hud->AddPolyline(outline,5,withAlpha(deepTeal,.85F),ImDrawFlags_Closed,2*s);
+      const ImU32 tone=player.health<=1?danger:player.health<=2?amber:glowCyan;
+      const float bloom=player.health<=2?.18F+.14F*std::sin(t*6.F):.22F;
       const float lostFlash=player.hurtCooldown>0?.5F+.5F*std::sin(player.hurtCooldown*28):0;
       for(int i=0;i<5;++i) {
         const ImVec2 a(pa.x+58*s+float(i)*38*s,pa.y+22*s),b(a.x+32*s,a.y+20*s);
         const bool full=i<player.health,justLost=i==player.health&&player.hurtCooldown>0;
-        const ImU32 col=full?cyan:justLost?withAlpha(danger,lostFlash):withAlpha(steel,.22F);
-        relay::drawSlanted(hud,{a.x+2*s,a.y+2*s},{b.x+2*s,b.y+2*s},7*s,withAlpha(navy,.45F),withAlpha(navy,.45F));
-        relay::drawSlanted(hud,a,b,7*s,col,col);
+        const int cellStart=hud->VtxBuffer.Size;
+        relay::drawSlanted(hud,a,b,7*s,withAlpha(ice,.16F),withAlpha(ice,.08F));
+        if(full) {
+          relay::drawSlanted(hud,{a.x-3*s,a.y-3*s},{b.x+3*s,b.y+3*s},8*s,withAlpha(tone,bloom),withAlpha(tone,bloom*.7F));
+          relay::drawSlanted(hud,a,b,7*s,tone,withAlpha(tone,.8F));
+          relay::drawSlanted(hud,{a.x+.85F*7*s,a.y},{b.x+.85F*7*s,a.y+3*s},1.05F*s,withAlpha(IM_COL32(255,255,255,255),.6F),withAlpha(IM_COL32(255,255,255,255),.15F));
+        } else if(justLost) relay::drawSlanted(hud,a,b,7*s,withAlpha(danger,lostFlash),withAlpha(danger,lostFlash));
+        if(justLost&&hitAge<.6F) {
+          const ImVec2 mid((a.x+b.x)*.5F,(a.y+b.y)*.5F);
+          relay::transformSince(hud,cellStart,mid,.3F*std::exp(-8.F*hitAge)*std::sin(hitAge*30),relay::punch(hitAge,.6F,26,9));
+          const float f=hitAge/.6F;
+          for(int k=0;k<8;++k) {
+            const float angle=-2.7F+float(k)*.33F,speed=(170+90*float(k%3))*s;
+            const ImVec2 q(mid.x+std::cos(angle)*speed*hitAge,mid.y+std::sin(angle)*speed*hitAge+560*s*hitAge*hitAge);
+            const float r=(4+float(k%3)*2)*s*(1-.5F*f);
+            const ImU32 shard=withAlpha(k%2?danger:cyan,1-f*f);
+            relay::drawSlanted(hud,{q.x-r,q.y-r*.6F},{q.x+r,q.y+r*.6F},r*.6F,shard,shard);
+          }
+        }
       }
+      if(hitAge<.5F) relay::transformSince(hud,rowStart,{pa.x+140*s,pa.y+32*s},0,1,{std::exp(-9.F*hitAge)*9*s*std::sin(hitAge*62),std::exp(-9.F*hitAge)*4*s*std::sin(hitAge*47)});
     }
     {
       // Lives as little courier heads (the one just lost flashes red; training shows a head and an
       // infinity sign), then the shield: a hex that lights while one is up and flashes as it breaks.
       const float ly=pa.y+70*s;
-      if(game.tutorial()) { head({pa.x+34*s,ly},cyan,true); infinity({pa.x+72*s,ly},16*s,cyan,2.5F*s); }
+      // Lives left glow: deep teal heads on a cyan bloom; spent ones fade to graphite.
+      const auto live=[&](ImVec2 c) { hud->AddCircleFilled(c,15*s,withAlpha(glowCyan,.22F),20); head(c,deepTeal,true); };
+      if(!game.timed()) { live({pa.x+34*s,ly}); infinity({pa.x+72*s,ly},16*s,deepTeal,2.5F*s); }
       else {
         const bool losing=game.state()==relay::RunState::Lost&&player.health<=0;
         for(int i=0;i<relay::Game::livesPerLevel;++i) {
           const ImVec2 c(pa.x+34*s+float(i)*34*s,ly);
           const bool alive=i<game.lives(),justLost=losing&&i==game.lives();
-          head(c,alive?cyan:justLost?withAlpha(danger,.5F+.5F*std::sin(player.deathTime*14)):withAlpha(steel,.22F),alive||justLost);
+          if(alive) live(c);
+          else head(c,justLost?withAlpha(danger,.5F+.5F*std::sin(player.deathTime*14)):withAlpha(ice,.25F),justLost);
         }
       }
-      hud->AddLine({pa.x+150*s,ly-12*s},{pa.x+150*s,ly+12*s},withAlpha(cyan,.25F),1.2F*s);
+      hud->AddLine({pa.x+150*s,ly-12*s},{pa.x+150*s,ly+12*s},withAlpha(ice,.25F),1.2F*s);
       const ImVec2 hc(pa.x+180*s,ly);
-      const float broke=player.motion.shieldBreakAge<.5F?1-player.motion.shieldBreakAge/.5F:0;
+      const float breakAge=player.motion.shieldBreakAge,broke=breakAge<.7F?1-breakAge/.7F:0;
       ImVec2 hex[6]; for(int k=0;k<6;++k) { const float a=float(k)*1.0472F; hex[k]={hc.x+std::cos(a)*12*s,hc.y+std::sin(a)*12*s}; }
-      if(player.shielded) { hud->AddCircleFilled(hc,18*s,withAlpha(cyan,.18F),20); hud->AddConvexPolyFilled(hex,6,cyan); }
-      else hud->AddPolyline(hex,6,broke>0?withAlpha(ice,broke):withAlpha(steel,.25F),ImDrawFlags_Closed,2*s);
+      const int shieldStart=hud->VtxBuffer.Size;
+      if(player.shielded) {
+        hud->AddCircleFilled(hc,19*s,withAlpha(glowCyan,.25F),20); hud->AddConvexPolyFilled(hex,6,glowCyan);
+        ImVec2 inner[6]; for(int k=0;k<6;++k) inner[k]={hc.x+(hex[k].x-hc.x)*.45F,hc.y+(hex[k].y-hc.y)*.45F};
+        hud->AddConvexPolyFilled(inner,6,withAlpha(IM_COL32(255,255,255,255),.6F));
+      } else hud->AddPolyline(hex,6,broke>0?withAlpha(glowCyan,broke):withAlpha(ice,.35F),ImDrawFlags_Closed,2*s);
+      {
+        // Jetpack charge: two little tanks, lit orange with a flame under each while a burst is
+        // ready; they flare as it fires.
+        const ImVec2 jc(pa.x+232*s,ly);
+        const bool ready=player.jets>0; const float fire=player.motion.jetAge<.4F?1-player.motion.jetAge/.4F:0;
+        const ImU32 orange=IM_COL32(255,140,50,255);
+        if(ready||fire>0) hud->AddCircleFilled(jc,15*s,withAlpha(orange,.2F+.3F*fire),20);
+        for(float side:{-1.F,1.F}) {
+          const ImVec2 a(jc.x+side*5*s-3.5F*s,jc.y-8*s),b(jc.x+side*5*s+3.5F*s,jc.y+5*s);
+          if(ready||fire>0) {
+            hud->AddRectFilled(a,b,withAlpha(orange,ready?1.F:fire),3*s);
+            hud->AddTriangleFilled({a.x+.5F*s,b.y+1*s},{b.x-.5F*s,b.y+1*s},{(a.x+b.x)*.5F,b.y+(6+5*fire+std::sin(t*30)*1.5F)*s},withAlpha(IM_COL32(255,220,140,255),ready?.9F:fire));
+          } else hud->AddRect(a,b,withAlpha(ice,.35F),3*s,0,1.5F*s);
+        }
+      }
       std::snprintf(text,sizeof(text),"%d",player.shielded?1:0);
-      relay::drawTracked(hud,24*s,{hc.x+22*s,ly-13*s},player.shielded?ice:withAlpha(steel,.5F),text,1*s,true);
+      relay::drawTracked(hud,24*s,{hc.x+22*s,ly-13*s},player.shielded?deepTeal:broke>0?withAlpha(danger,broke):withAlpha(ice,.55F),text,1*s,true);
+      if(broke>0) {
+        // A breaking shield shatters like a struck card: a white flash and a swell with a twist,
+        // two hex shock rings, sparks, and the hex itself split into twelve wedges that fly apart,
+        // spin and fall. The whole status corner shakes (below) and the screen edges flash.
+        const float age=breakAge,f=1-broke;
+        if(age<.12F) hud->AddConvexPolyFilled(hex,6,withAlpha(IM_COL32(255,255,255,255),1-age/.12F));
+        hud->AddCircleFilled(hc,(18+26*f)*s,withAlpha(ice,.35F*broke*broke),24);
+        relay::transformSince(hud,shieldStart,hc,.45F*std::exp(-7.F*age)*std::sin(age*24),relay::punch(age,1.F,26,8));
+        for(int ring=0;ring<2;++ring) {
+          const float k=std::clamp((age-float(ring)*.08F)/.45F,0.F,1.F);
+          if(k>0&&k<1) hud->AddCircle(hc,(14+(70+float(ring)*30)*k)*s,withAlpha(ring?cyan:ice,(1-k)*(1-k)),6,(4-2*k)*s);
+        }
+        for(int k=0;k<10;++k) {
+          const float angle=float(k)*.628F+.2F,k0=std::min(1.F,age/.3F);
+          if(k0>=1) continue;
+          const float r0=(16+40*k0)*s,r1=(16+(40+30*float(k%2))*k0+26*(1-k0))*s;
+          hud->AddLine({hc.x+std::cos(angle)*r0,hc.y+std::sin(angle)*r0},{hc.x+std::cos(angle)*r1,hc.y+std::sin(angle)*r1},withAlpha(k%3?ice:cyan,1-k0),2.5F*s);
+        }
+        for(int k=0;k<12;++k) {
+          const ImVec2 v0=hex[k/2],v1=hex[(k/2+1)%6],mid((v0.x+v1.x)*.5F,(v0.y+v1.y)*.5F);
+          const ImVec2 p0=hc,p1=k%2?mid:v0,p2=k%2?v1:mid;
+          const ImVec2 centroid((p0.x+p1.x+p2.x)/3,(p0.y+p1.y+p2.y)/3);
+          const float dx=centroid.x-hc.x,dy=centroid.y-hc.y,len=std::max(.001F,std::sqrt(dx*dx+dy*dy));
+          const float speed=(150+60*float(k%3))*s,drag=(1-std::exp(-3.F*age))/3.F,spin=(k%2?1.F:-1.F)*(6+float(k%4))*age,grow=1.9F-.6F*f;
+          const ImVec2 at(centroid.x+dx/len*speed*drag,centroid.y+dy/len*speed*drag+300*s*age*age);
+          const float co=std::cos(spin)*grow,si=std::sin(spin)*grow;
+          const auto place=[&](ImVec2 p) { const float x=p.x-centroid.x,y=p.y-centroid.y; return ImVec2(at.x+x*co-y*si,at.y+x*si+y*co); };
+          hud->AddTriangleFilled(place(p0),place(p1),place(p2),withAlpha(k%3==0?IM_COL32(255,255,255,255):k%3==1?cyan:ice,broke));
+        }
+      }
+    }
+    if(player.motion.shieldBreakAge<.5F) {
+      const float age=player.motion.shieldBreakAge,k=std::exp(-8.F*age);
+      relay::transformSince(hud,statusStart,{pa.x+120*s,pa.y+50*s},.03F*k*std::sin(age*40),1,{k*12*s*std::sin(age*64),k*7*s*std::sin(age*51+1.1F)});
     }
     {
-      // Cores, bottom centre: hexagonal sockets that fill and glow, and the count.
+      // Cores, bottom centre: hexagonal sockets that fill and glow (no count).
       const int cores=int(game.cores().size()),collected=game.collectedCount();
-      std::snprintf(text,sizeof(text),"%d/%d",collected,cores);
-      const float countWidth=relay::drawTracked(nullptr,30*s,{},0,text,2*s,true);
-      const float w=36*s+float(cores)*40*s+countWidth+30*s;
+      const float w=float(cores)*40*s+32*s;
       const ImVec2 ka((display.x-w)*.5F,display.y-92*s),kb((display.x+w)*.5F,display.y-30*s);
       const float fresh=player.motion.celebrateAge<.6F?1-player.motion.celebrateAge/.6F:0;
       for(int i=0;i<cores;++i) {
         const ImVec2 c(ka.x+36*s+float(i)*40*s,(ka.y+kb.y)*.5F);
+        const int start=hud->VtxBuffer.Size;
         ImVec2 hex[6]; for(int k=0;k<6;++k) { const float a=float(k)*1.0472F+.5236F; hex[k]={c.x+std::cos(a)*14*s,c.y+std::sin(a)*14*s}; }
         if(i<collected) { hud->AddCircleFilled(c,22*s,withAlpha(mint,.16F+.3F*(i==collected-1?fresh:0)),24); hud->AddConvexPolyFilled(hex,6,mint); }
         else hud->AddPolyline(hex,6,withAlpha(steel,.9F),ImDrawFlags_Closed,2*s);
+        if(i==collected-1&&fresh>0) {
+          // Just recovered: the socket pops with a twist, a hex ring snaps outward, shards scatter.
+          const float age=player.motion.celebrateAge,f=age/.6F;
+          relay::transformSince(hud,start,c,.35F*std::exp(-7.F*age)*std::sin(age*22),relay::punch(age,.8F,24,8));
+          hud->AddCircle(c,(16+70*age)*s,withAlpha(mint,fresh*fresh),6,3*s*fresh);
+          for(int k=0;k<10;++k) {
+            const float angle=float(k)*.628F+.3F,speed=(170+70*float(k%3))*s;
+            const ImVec2 q(c.x+std::cos(angle)*speed*age,c.y+std::sin(angle)*speed*age+320*s*age*age);
+            const float r=(3.5F+float(k%3)*1.5F)*s*(1-.5F*f);
+            hud->AddRectFilled({q.x-r,q.y-r},{q.x+r,q.y+r},withAlpha(k%3?mint:ice,1-f*f));
+          }
+        }
       }
-      relay::drawTracked(hud,30*s,{ka.x+20*s+float(cores)*40*s,(ka.y+kb.y)*.5F-17*s},collected==cores?mint:ice,text,2*s,true);
       // Boost meter just above the cores, only while a boost runs: spring boots (a green chevron
       // with a draining ring) and the speed-pad bar. The bar shows a flight's clock (pulsing while
       // grounded), or how much pad speed a slide or stride still carries. It glows white-blue and
@@ -235,42 +402,152 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
         }
       }
     }
-    // Countdown: big glowing digits (an infinity sign in training); amber under 30 s, pulsing red
-    // under 10 s.
+    // Countdown: a flat sky-blue card in the top right (no frame) with self-lit digits (an infinity
+    // sign in training); the digits glow amber under 30 s and red under 10 s, when the card pulses.
+    // Time changes hit it like a scored card in a deck-builder. A crimson tile slashes it: a blade
+    // streak sweeps across, the card splits along it and snaps back with a hard shake, twist and
+    // punch, sparks spray off the cut and shards fly, and a frameless -5 S stamps down beside it,
+    // wobbles and falls away. A clock pickup pops the card gold and +30 S springs up and floats off.
     const float remaining=game.timeRemaining();
     std::snprintf(text,sizeof(text),"%d:%02d",int(std::ceil(remaining))/60,int(std::ceil(remaining))%60);
-    ImU32 clock=!game.timed()?cyan:remaining<10?withAlpha(danger,.75F+.25F*std::sin(t*12)):remaining<30?amber:cyan;
-    // A clock pickup: the digits flash gold and +30 S floats up beside them and fades.
-    const float bonus=game.timed()&&game.timeBonusAge()<1.6F?game.timeBonusAge()/1.6F:-1;
-    const ImU32 gold=IM_COL32(255,205,90,255);
-    if(bonus>=0&&bonus<.45F&&std::fmod(bonus,.15F)<.09F) clock=gold;
-    const float clockWidth=game.timed()?relay::drawTracked(nullptr,82*s,{},0,text,3*s,true):150*s;
-    const ImVec2 ca(display.x-clockWidth-78*s,20*s),cb(display.x-22*s,118*s);
-    relay::drawPanel(hud,ca,cb,16*s,withAlpha(navy,.78F),withAlpha(clock,.55F),1.4F*s);
-    if(game.timed()) relay::drawGlow(hud,82*s,{cb.x-clockWidth-26*s,ca.y+8*s},clock,clock,text,3*s);
-    else { infinity({cb.x-26*s-clockWidth*.5F,ca.y+49*s},58*s,withAlpha(clock,.35F),10*s); infinity({cb.x-26*s-clockWidth*.5F,ca.y+49*s},58*s,clock,4*s); }
-    if(bonus>=0) {
-      const float k=1-(1-bonus)*(1-bonus),fade=1-bonus*bonus;
-      char plus[16]; std::snprintf(plus,sizeof(plus),"+%d S",int(relay::Game::timeBonus));
-      const float w=relay::drawTracked(nullptr,40*s,{},0,plus,3*s,true);
-      relay::drawGlow(hud,40*s,{cb.x-w-30*s,cb.y+6*s-26*s*k},withAlpha(gold,fade),withAlpha(gold,fade),plus,3*s);
-    }
-    const auto banner=[&](const char* message,ImU32 accent,float alpha,float by) {
-      const float w=relay::drawTracked(nullptr,28*s,{},0,message,2.5F*s,true);
-      const float slide=(1-alpha)*-20*s;
-      const ImVec2 a((display.x-w)*.5F-34*s,by+slide),b((display.x+w)*.5F+26*s,by+slide+52*s);
-      relay::drawPanel(hud,a,b,12*s,withAlpha(navy,.84F*alpha),withAlpha(accent,.7F*alpha),1.4F*s);
-      hud->AddRectFilled({a.x+10*s,a.y+12*s},{a.x+16*s,b.y-12*s},withAlpha(accent,alpha));
-      relay::drawTracked(hud,28*s,{a.x+30*s,a.y+10*s},withAlpha(ice,alpha),message,2.5F*s,true);
+    const auto mix=[](ImU32 x,ImU32 y,float k) {
+      const ImVec4 p=ImGui::ColorConvertU32ToFloat4(x),q=ImGui::ColorConvertU32ToFloat4(y);
+      return ImGui::ColorConvertFloat4ToU32({p.x+(q.x-p.x)*k,p.y+(q.y-p.y)*k,p.z+(q.z-p.z)*k,p.w+(q.w-p.w)*k});
     };
-    if(game.messageTime()>0&&game.state()==relay::RunState::Playing) banner(game.message().c_str(),cyan,std::min({1.F,game.messageTime()/.4F,(3.5F-game.messageTime())/.15F}),24*s);
+    // Turn and scale everything drawn since `start` about c, then move it by offset.
+    const auto transform=[&](int start,ImVec2 c,float angle,float scale,ImVec2 offset) { relay::transformSince(hud,start,c,angle,scale,offset); };
+    const ImU32 ink=IM_COL32(12,34,68,255),sky=IM_COL32(236,238,242,255),white=IM_COL32(255,255,255,255);
+    const ImU32 gold=IM_COL32(255,196,60,255),crimson=IM_COL32(236,34,62,255),skyGlow=IM_COL32(255,255,255,255);
+    const bool urgent=game.timed()&&remaining<10;
+    const ImU32 digits=!game.timed()?deepTeal:urgent?IM_COL32(205,32,58,255):remaining<30?IM_COL32(190,116,12,255):deepTeal;
+    const ImU32 halo=urgent?IM_COL32(255,90,120,255):remaining<30&&game.timed()?amber:glowCyan;  // the digits glow on the acrylic
+    (void)skyGlow;
+    ImU32 fill=urgent?mix(sky,IM_COL32(250,200,210,255),.3F+.3F*std::sin(t*12)):sky;
+    const float bonusAge=game.timeBonusAge(),penaltyAge=game.timePenaltyAge();
+    // Envelopes: the slash is a hard, fast damped jolt; the pop a softer overshoot.
+    const float hit=penaltyAge<.7F?std::exp(-9.F*penaltyAge):0,pop=bonusAge<.7F?std::exp(-7.F*bonusAge):0;
+    const ImVec2 shake(hit*18*s*std::sin(penaltyAge*70),hit*9*s*std::sin(penaltyAge*53+1.3F));
+    const float twist=hit*.16F*std::sin(penaltyAge*42+.4F)+pop*.07F*std::sin(bonusAge*28);
+    const float punch=1+hit*.26F*std::cos(penaltyAge*34)+pop*.22F*std::cos(bonusAge*24);
+    if(penaltyAge<.05F) fill=white;
+    else if(penaltyAge<.24F) fill=mix(crimson,fill,(penaltyAge-.05F)/.19F);
+    if(bonusAge<.16F) fill=mix(fill,gold,1-bonusAge/.16F);
+    const float clockWidth=game.timed()?relay::drawTracked(nullptr,82*s,{},0,text,3*s,true):150*s;
+    const ImVec2 ca(display.x-clockWidth-78*s,20*s),cb(display.x-22*s,118*s),centre((ca.x+cb.x)*.5F,(ca.y+cb.y)*.5F);
+    const auto card=[&](ImVec2 offset) {
+      const int start=hud->VtxBuffer.Size;
+      relay::drawAcrylicRect(hud,ca,cb,14*s,1,fill);
+      const ImU32 under=withAlpha(white,.6F);  // a light emboss under the digits
+      if(game.timed()) {
+        const ImVec2 at(cb.x-clockWidth-26*s,ca.y+8*s);
+        relay::drawTracked(hud,82*s,{at.x,at.y+3*s},under,text,3*s,true);
+        relay::drawGlow(hud,82*s,at,digits,halo,text,3*s);
+      } else {
+        const ImVec2 c(cb.x-26*s-clockWidth*.5F,ca.y+49*s);
+        infinity({c.x,c.y+3*s},58*s,under,5*s); infinity(c,58*s,withAlpha(halo,.3F),11*s); infinity(c,58*s,digits,4.5F*s);
+      }
+      transform(start,centre,twist,punch,{shake.x+offset.x,shake.y+offset.y});
+    };
+    // The cut: a shallow rising line through the card. Just after the blade passes, the halves
+    // above and below it are pushed apart along it, then snap back together.
+    const float slashAngle=-.12F,sweep=.06F;
+    const ImVec2 along(std::cos(slashAngle),std::sin(slashAngle)),across(-along.y,along.x);
+    const float split=penaltyAge>=sweep*.5F&&penaltyAge<.4F?18*s*std::exp(-11.F*(penaltyAge-sweep*.5F)):0;
+    if(split>.5F*s) {
+      hud->PushClipRect({0,0},{display.x,centre.y},true);
+      card({-along.x*split-across.x*split*.45F,-along.y*split-across.y*split*.45F});
+      hud->PopClipRect();
+      hud->PushClipRect({0,centre.y},display,true);
+      card({along.x*split+across.x*split*.45F,along.y*split+across.y*split*.45F});
+      hud->PopClipRect();
+    } else card({0,0});
+    if(penaltyAge<.6F) {
+      const auto hash=[](float n) { const float h=std::sin(n*12.9898F)*43758.5453F; return h-std::floor(h); };
+      const float half=(cb.x-ca.x)*.5F+80*s;
+      const ImVec2 start(centre.x-along.x*half+shake.x,centre.y-along.y*half+shake.y);
+      // The blade streak: the tip sweeps across in `sweep` seconds, then the tail chases it and the
+      // streak thins away; a white core inside a crimson edge.
+      const float head=std::min(1.F,penaltyAge/sweep),tail=std::clamp((penaltyAge-sweep*.6F)/.2F,0.F,1.F);
+      if(tail<1) {
+        const float width=(1-tail)*(1-tail);
+        const ImVec2 h0(start.x+along.x*half*2*head,start.y+along.y*half*2*head),t0(start.x+along.x*half*2*tail,start.y+along.y*half*2*tail);
+        const ImVec2 mid((h0.x+t0.x)*.5F,(h0.y+t0.y)*.5F);
+        for(int layer=0;layer<2;++layer) {
+          const float w=(layer?8.F:20.F)*s*width;
+          const ImVec2 q[4]{t0,{mid.x+across.x*w,mid.y+across.y*w},h0,{mid.x-across.x*w,mid.y-across.y*w}};
+          hud->AddConvexPolyFilled(q,4,layer?white:withAlpha(crimson,.85F));
+        }
+      }
+      // Sparks off the cut: streaks thrown out to both sides as the tip passes their spot.
+      for(int i=0;i<40;++i) {
+        const float u=hash(float(i)*1.37F),born=u*sweep,age=penaltyAge-born,life=.3F+.3F*hash(float(i)*4.1F);
+        if(age<0||age>life) continue;
+        const float side=i%2?1.F:-1.F,speed=(320+520*hash(float(i)*2.9F))*s,fwd=.2F+.9F*hash(float(i)*6.3F);
+        const ImVec2 v(along.x*speed*fwd+across.x*speed*side,along.y*speed*fwd+across.y*speed*side);
+        const float drag=(1-std::exp(-5.F*age))/5.F,f=age/life;
+        const ImVec2 o(start.x+along.x*half*2*u,start.y+along.y*half*2*u);
+        const ImVec2 p(o.x+v.x*drag,o.y+v.y*drag+420*s*age*age),tailP(p.x-v.x*.035F*(1-f),p.y-v.y*.035F*(1-f));
+        hud->AddLine(tailP,p,withAlpha(f<.35F?white:i%3?crimson:gold,1-f*f),(3.2F-1.8F*f)*s);
+      }
+      // Shards of the card: flat spinning squares in its colours, flung out and falling.
+      for(int i=0;i<16;++i) {
+        const float age=penaltyAge-.02F,life=.55F+.15F*hash(float(i)*8.7F);
+        if(age<0||age>life) continue;
+        const float angle=1.35F+2.F*hash(float(i)*3.3F),speed=(260+260*hash(float(i)*9.1F))*s,f=age/life;
+        const float drag=(1-std::exp(-3.5F*age))/3.5F;
+        const ImVec2 c(centre.x+std::cos(angle)*(60*s+speed*drag),centre.y+std::sin(angle)*(24*s+speed*drag)+620*s*age*age);
+        const float r=(5+5*hash(float(i)*2.2F))*s*(1-f*.5F),spin=float(i)*1.1F+age*(10+float(i%3)*5);
+        ImVec2 q[4];
+        for(int k=0;k<4;++k) q[k]={c.x+std::cos(spin+float(k)*1.5708F)*r,c.y+std::sin(spin+float(k)*1.5708F)*r*.7F};
+        hud->AddQuadFilled(q[0],q[1],q[2],q[3],withAlpha(i%3==0?white:i%3==1?crimson:sky,1-f*f));
+      }
+    }
+    // Frameless numbers beside the card. A stamp slams down from twice its size with a hard
+    // overshoot; a pop springs up from nothing. Both wobble, hold, then fall (or float) away.
+    const auto number=[&](const char* label,float age,float life,ImU32 colour,ImU32 edge,ImVec2 at,float lean,bool stamp) {
+      if(age>=life) return;
+      const float size=66*s,w=relay::drawTracked(nullptr,size,{},0,label,3*s,true);
+      const float in=std::min(1.F,age/.34F);
+      const float scale0=stamp?1+1.3F*std::exp(-13.F*age)*std::cos(age*24.F):std::max(0.F,1-std::exp(-7.F*in)*std::cos(in*12.F));
+      const float out=std::clamp((age-life*.62F)/(life*.38F),0.F,1.F),alpha=std::min(1.F,age/.03F)*(1-out*out);
+      const float angle=lean+.45F*std::exp(-6.F*age)*std::cos(age*20.F)+(stamp?.5F:-.2F)*out*out;
+      const int start=hud->VtxBuffer.Size;
+      const ImVec2 p(at.x-w*.5F,at.y-size*.62F);
+      relay::drawTracked(hud,size,{p.x,p.y+6*s},withAlpha(ink,.35F*alpha),label,3*s,true);  // hard shadow
+      for(int k=0;k<8;++k) {
+        const float a=float(k)*.785398F;
+        relay::drawTracked(hud,size,{p.x+std::cos(a)*3.5F*s,p.y+std::sin(a)*3.5F*s},withAlpha(edge,alpha),label,3*s,true);
+      }
+      relay::drawTracked(hud,size,p,withAlpha(colour,alpha),label,3*s,true);
+      const float fall=stamp?out*out*90*s:-out*out*60*s;
+      transform(start,at,angle,scale0*(1-.25F*out),{0,fall});
+    };
+    char label[16];
+    std::snprintf(label,sizeof(label),"+%d S",int(relay::Game::timeBonus));
+    number(label,bonusAge,1.6F,gold,IM_COL32(90,50,0,255),{ca.x+10*s,cb.y+44*s},-.1F,false);
+    std::snprintf(label,sizeof(label),"-%d S",int(relay::Game::drainPenalty));
+    number(label,penaltyAge,1.3F,crimson,IM_COL32(60,4,16,255),{ca.x+10*s-(bonusAge<1.6F?190*s:0.F),cb.y+44*s},-.14F,true);
+    // Banners: flat cards (cut corners, hard shadow, an accent stripe). Given an age they are dealt
+    // in like a card, growing with an elastic overshoot from a twist that settles, then sway gently.
+    const auto banner=[&](const char* message,ImU32 accent,float alpha,float by,float age=-1) {
+      const float w=relay::drawTracked(nullptr,28*s,{},0,message,2.5F*s,true);
+      const float slide=age>=0?0:(1-alpha)*-20*s;
+      const ImVec2 a((display.x-w)*.5F-34*s,by+slide),b((display.x+w)*.5F+26*s,by+slide+52*s);
+      const int start=hud->VtxBuffer.Size;
+      relay::drawPanel(hud,a,b,12*s,withAlpha(slate,alpha),withAlpha(accent,alpha),1.4F*s);
+      hud->AddRectFilled({a.x+11*s,a.y+13*s},{a.x+15*s,b.y-13*s},withAlpha(accent,.85F*alpha));
+      relay::drawTracked(hud,28*s,{a.x+30*s,a.y+11.5F*s},withAlpha(IM_COL32(255,255,255,255),.6F*alpha),message,2.5F*s,true);  // emboss
+      relay::drawTracked(hud,28*s,{a.x+30*s,a.y+10*s},withAlpha(graphite,alpha),message,2.5F*s,true);
+      if(age>=0) relay::transformSince(hud,start,{(a.x+b.x)*.5F,(a.y+b.y)*.5F},-.14F*std::exp(-6.F*age)*std::cos(age*18)+.008F*std::sin(t*1.6F),relay::elasticIn(age,.32F));
+    };
+    if(game.messageTime()>0&&game.state()==relay::RunState::Playing) banner(game.message().c_str(),cyan,std::min({1.F,game.messageTime()/.4F,(3.5F-game.messageTime())/.15F}),24*s,3.5F-game.messageTime());
     if(!focused) banner("PAUSED  //  CLICK TO RESUME",amber,1,display.y*.42F);
     if(game.respawning()) {
       // Reboot: a banner and progress bar after the fall, then a fade to black for the beam-in.
       const float since=player.deathTime,shown=std::clamp((since-.9F)/.4F,0.F,1.F),progress=std::clamp(since/relay::Game::respawnDelay,0.F,1.F);
       const float by=display.y*.30F;
       char reboot[96]; std::snprintf(reboot,sizeof(reboot),"%s  //  %d %s LEFT",game.activeCheckpoint()>=0?"REBOOTING AT CHECKPOINT":"REBOOTING AT ENTRY POINT",game.lives(),game.lives()==1?"LIFE":"LIVES");
-      banner(reboot,cyan,shown,by);
+      banner(reboot,cyan,shown,by,since-.9F);
       const float barX=display.x*.5F-210*s;
       for(int i=0;i<24;++i) {
         const bool done=float(i)/24.F<progress; const ImU32 c=withAlpha(done?cyan:steel,(done?.9F:.3F)*shown);
@@ -282,7 +559,7 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
     if(game.outOfLives()) {
       // Last life gone: a red banner, then the screen goes black and the level restarts.
       const float since=player.deathTime,shown=std::clamp((since-.9F)/.4F,0.F,1.F);
-      banner("ALL LIVES LOST  //  RESTARTING SECTOR",danger,shown,display.y*.30F);
+      banner("ALL LIVES LOST  //  RESTARTING SECTOR",danger,shown,display.y*.30F,since-.9F);
       const float black=std::clamp((since-(relay::Game::respawnDelay-.6F))/.5F,0.F,1.F);
       if(black>0) ImGui::GetForegroundDrawList()->AddRectFilled({0,0},display,withAlpha(IM_COL32(2,7,14,255),black));
     }
@@ -294,19 +571,20 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
       const auto& kb=relay::keyBindings(); using relay::KeyAction; using relay::KeyBindings;
       const std::string move=KeyBindings::keyName(kb[KeyAction::Forward])+KeyBindings::keyName(kb[KeyAction::Left])+KeyBindings::keyName(kb[KeyAction::Back])+KeyBindings::keyName(kb[KeyAction::Right]);
       const std::string sprint=KeyBindings::keyName(kb[KeyAction::Sprint]),jump=KeyBindings::keyName(kb[KeyAction::Jump]),crouch=KeyBindings::keyName(kb[KeyAction::Crouch]),use=KeyBindings::keyName(kb[KeyAction::Interact]);
-      const char* rows[][2]{{move.c_str(),"MOVE"},{sprint.c_str(),"SPRINT"},{jump.c_str(),"JUMP"},{crouch.c_str(),"CROUCH/SLIDE"},{use.c_str(),"INTERACT"},{"MOUSE","LOOK"},{"ESC","PAUSE"}};
+      const char* rows[][2]{{move.c_str(),"MOVE"},{sprint.c_str(),"SPRINT"},{jump.c_str(),"JUMP"},{crouch.c_str(),"CROUCH/SLIDE"},{use.c_str(),"INTERACT"},{"L MOUSE","WALL"},{"MOUSE","LOOK"},{"ESC","PAUSE"}};
       // A column on the right edge, keycaps right-aligned, on a soft backing.
       float keyWidth=0,labelWidth=0;
       for(auto& r:rows) { keyWidth=std::max(keyWidth,relay::drawKeycap(nullptr,s,{},0,r[0])); labelWidth=std::max(labelWidth,relay::drawTracked(nullptr,16*s,{},0,r[1],2.5F*s)); }
       const float rowStep=40*s,columnWidth=labelWidth+14*s+keyWidth,right=display.x-30*s;
       const float top=display.y*.5F-float(std::size(rows))*rowStep*.5F;
-      hud->AddRectFilled({right-columnWidth-22*s,top-16*s},{right+14*s,top+float(std::size(rows))*rowStep+4*s},withAlpha(navy,.5F*hint),10*s);
+      const ImVec2 backA(right-columnWidth-22*s,top-16*s),backB(right+14*s,top+float(std::size(rows))*rowStep+4*s);
+      relay::drawAcrylicRect(hud,backA,backB,10*s,hint,surface);
       for(std::size_t i=0;i<std::size(rows);++i) {
         const float y=top+float(i)*rowStep;
         const float kw=relay::drawKeycap(nullptr,s,{},0,rows[i][0]);
         relay::drawKeycap(hud,s,{right-kw,y},withAlpha(cyan,hint),rows[i][0]);
         const float lw=relay::drawTracked(nullptr,16*s,{},0,rows[i][1],2.5F*s);
-        relay::drawTracked(hud,16*s,{right-keyWidth-14*s-lw,y+5*s},withAlpha(ice,.9F*hint),rows[i][1],2.5F*s);
+        relay::drawTracked(hud,16*s,{right-keyWidth-14*s-lw,y+5*s},withAlpha(graphite,.85F*hint),rows[i][1],2.5F*s);
       }
     }
   }
@@ -343,15 +621,17 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
         box(tile,IM_COL32(255,110,90,255));
       }
   }
-  // World labels: small glass tags with a coloured stripe; prompts show the key to press.
+  // World labels: small flat tags (cut corners, hard shadow, a coloured stripe) that sway a little
+  // on their own beat; prompts show the key to press.
   auto label=[&](glm::vec3 p,const char* text,ImU32 accent,const char* key=nullptr) {
     const auto xy=renderer.project(p,display.x,display.y); if(xy.x<-1000) return;
     if(xy.y<175*s) return;  // Never under the top HUD panels.
     const float keyWidth=key?30*s+10*s:0;
     const float w=relay::drawTracked(nullptr,24*s,{},0,text,2*s,true)+keyWidth;
     const ImVec2 a(xy.x-w*.5F-20*s,xy.y-21*s),b(xy.x+w*.5F+16*s,xy.y+21*s);
-    relay::drawPanel(hud,a,b,9*s,withAlpha(navy,.82F),withAlpha(accent,.75F),1.3F*s);
-    hud->AddRectFilled({a.x+7*s,a.y+9*s},{a.x+11*s,b.y-9*s},accent);
+    const int start=hud->VtxBuffer.Size;
+    relay::drawPanel(hud,a,b,9*s,slate,accent,1.3F*s);
+    hud->AddRectFilled({a.x+7*s,a.y+10*s},{a.x+10*s,b.y-10*s},withAlpha(accent,.85F));
     float tx=a.x+20*s;
     if(key) {
       // Filled key: dark letter on the accent colour, pulsing gently.
@@ -360,15 +640,17 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
       relay::drawTracked(hud,24*s,{tx+9*s,a.y+6*s},navy,key,0,true);
       tx+=keyWidth;
     }
-    relay::drawTracked(hud,24*s,{tx,a.y+6*s},ice,text,2*s,true);
+    relay::drawTracked(hud,24*s,{tx,a.y+7.5F*s},withAlpha(IM_COL32(255,255,255,255),.6F),text,2*s,true);  // emboss
+    relay::drawTracked(hud,24*s,{tx,a.y+6*s},graphite,text,2*s,true);
+    relay::transformSince(hud,start,{xy.x,xy.y},.02F*std::sin(game.elapsed()*1.7F+xy.x*.013F),1);
   };
   if(!options.gallery&&game.state()==relay::RunState::Playing) {
-    label(game.gatePosition()+glm::vec3(0,3.7F,0),game.gateUnlocked()?"EXIT OPEN":"EXIT LOCKED",game.gateUnlocked()?mint:amber);
+    if(!game.practice()) label(game.gatePosition()+glm::vec3(0,3.7F,0),game.gateUnlocked()?"EXIT OPEN":"EXIT LOCKED",game.gateUnlocked()?mint:amber);
     if(game.tutorial()) {
       // The training objective, with its distance.
       const auto target=game.tutorialTarget();
       const float distance=glm::distance(glm::vec2(target.x,target.z),glm::vec2(game.player().position.x,game.player().position.z));
-      char objective[40]; std::snprintf(objective,sizeof(objective),"OBJECTIVE  %dM",int(std::round(distance)));
+      char objective[64]; std::snprintf(objective,sizeof(objective),"%s  %dM",game.tutorialHint(),int(std::round(distance)));
       if(distance>2.5F) label(target+glm::vec3(0,3.5F,0),objective,mint);
     }
     for(std::size_t i=0;i<game.traps().size();++i) {
@@ -377,6 +659,10 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
       char text[64]; std::snprintf(text,sizeof(text),"%s  %.1f",name,game.trapPhaseRemaining(i));
       const ImU32 accent=phase==relay::TrapPhase::Active?danger:phase==relay::TrapPhase::Warning?amber:cyan;
       label((game.traps()[i].area.min+game.traps()[i].area.max)*.5F+glm::vec3(0,.45F,0),text,accent);
+    }
+    for(const auto& tile:game.drainTiles()) {
+      const glm::vec3 c=(tile.area.min+tile.area.max)*.5F;
+      if(glm::distance(c,game.player().position)<12) label(c+glm::vec3(0,.6F,0),"CRIMSON  -5S",IM_COL32(235,40,60,255));
     }
     const auto available=game.availableInteraction();
     const std::string interactKey=relay::KeyBindings::keyName(relay::keyBindings()[relay::KeyAction::Interact]);
@@ -389,6 +675,17 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
       char text[32];
       if(door.hold>0) { std::snprintf(text,sizeof(text),"DOOR OPEN  %.1f",door.hold); label(door.centre+glm::vec3(0,1.5F,0),text,cyan); }
       else label(door.centre+glm::vec3(0,1.5F,0),door.open>.02F?"DOOR CLOSING":"DOOR SEALED",amber);
+    }
+    // Portals: sleeping ends name themselves nearby, an awake one waits for its pair, a linked pair
+    // says so at both ends; the nearest sleeping end offers the E prompt.
+    for(std::size_t i=0;i<game.portals().size();++i) for(int end=0;end<2;++end) {
+      const auto& link=game.portals()[i]; const bool on=end==0?link.fromOn:link.toOn;
+      const glm::vec3 at=(end==0?link.from:link.to)+glm::vec3(0,1.9F,0);
+      if(glm::distance(at,game.player().position)>12) continue;
+      if(available==relay::Interaction::Portal&&game.nearestPortal()==int(i)*2+end) label(at,"ACTIVATE PORTAL",amber,interactKey.c_str());
+      else if(!on) label(at,"PORTAL",amber);
+      else if(!link.linked()) label(at,"PORTAL  //  FIND ITS PAIR",IM_COL32(255,170,60,255));
+      else label(at,"PORTAL  //  LINKED",glowCyan);
     }
     for(const auto& plate:game.plates())
       if(!plate.down&&glm::distance(plate.position,game.player().position)<9) label(plate.position+glm::vec3(0,.7F,0),"PRESSURE PLATE",amber);
@@ -406,18 +703,27 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
     const float appear=std::clamp(won?game.player().motion.victoryAge/.6F-.5F:(game.player().deathTime-1.1F)/.4F,0.F,1.F);
     const ImU32 accent=won?mint:danger;
     const float by=display.y*.12F,bh=300*s,wipe=display.x*appear*appear*(3-2*appear);
-    hud->AddRectFilled({0,by},{wipe,by+bh},withAlpha(navy,.88F));
+    if(wipe>2) relay::drawAcrylicRect(hud,{0,by},{wipe,by+bh},0,1,surface);
     relay::drawScanlines(hud,{0,by},{wipe,by+bh},4*s,withAlpha(accent,.05F));
     hud->AddRectFilled({0,by},{wipe,by+3*s},accent);
     hud->AddRectFilled({0,by+bh-3*s},{wipe,by+bh},withAlpha(accent,.6F));
     const float x0=display.x*.5F-360*s;
     const char* title=won?(game.tutorial()?"TRAINING COMPLETE":"RELAY COMPLETE"):game.player().health<=0?"COURIER DESTROYED":"POWER DEPLETED";
     relay::drawTracked(hud,16*s,{x0,by+26*s},withAlpha(accent,appear),won?"STATION RESTORED  //  ALL CORES ONLINE":"SIGNAL LOST  //  UNIT 07 OFFLINE",3*s);
-    relay::drawGlow(hud,92*s,{x0-4*s,by+40*s},withAlpha(ice,appear),accent,title,4*s);
-    char value[32]; float sx=x0;
+    // The title stamps down from twice its size once the band has wiped past the middle.
+    const float age=(won?game.player().motion.victoryAge-.3F:game.player().deathTime-1.1F)-.3F;
+    if(age>0) {
+      const int start=hud->VtxBuffer.Size;
+      const float tw=relay::drawGlow(hud,92*s,{x0-4*s,by+40*s},withAlpha(deepTeal,std::min(1.F,age/.06F)),glowCyan,title,4*s);
+      relay::transformSince(hud,start,{x0+tw*.5F,by+92*s},-.1F*std::exp(-6.F*age)*std::cos(age*18),relay::punch(age,1.F,22,12));
+    }
+    char value[32]; float sx=x0; int statIndex=0;
     const auto stat=[&](const char* name,const char* v) {
-      relay::drawTracked(hud,13*s,{sx,by+150*s},withAlpha(steel,appear),name,3*s);
-      relay::drawTracked(hud,40*s,{sx,by+164*s},withAlpha(ice,appear),v,2*s,true);
+      const float pop=age-.35F-.12F*float(statIndex++);
+      const int start=hud->VtxBuffer.Size;
+      relay::drawTracked(hud,13*s,{sx,by+150*s},withAlpha(graphiteSoft,appear),name,3*s);
+      relay::drawTracked(hud,40*s,{sx,by+164*s},withAlpha(graphite,appear),v,2*s,true);
+      relay::transformSince(hud,start,{sx+40*s,by+180*s},-.12F*std::exp(-7.F*std::max(0.F,pop))*std::cos(pop*18),relay::elasticIn(pop,.3F));
       sx+=200*s;
     };
     std::snprintf(value,sizeof(value),"%d / %d",game.collectedCount(),int(game.cores().size())); stat("CORES",value);
@@ -432,7 +738,7 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
     if(ImGui::Button("RESTART  [R]")) levelRequest_=game.level();
     ImGui::PopStyleColor(4); ImGui::SameLine(0,14*s);
     ImGui::PushStyleColor(ImGuiCol_Button,{0,.88F,1,.10F*appear}); ImGui::PushStyleColor(ImGuiCol_ButtonHovered,{0,.88F,1,.25F*appear});
-    ImGui::PushStyleColor(ImGuiCol_Text,{.84F,.97F,1,appear});
+    ImGui::PushStyleColor(ImGuiCol_Text,{.25F,.27F,.31F,appear});
     // Missions stay locked: training and locked runs only offer a restart.
     if(relay::Game::missionsUnlocked&&!game.tutorial()&&ImGui::Button(game.level()==0?"NEXT LEVEL":"FIRST LEVEL")) levelRequest_=1-game.level();
     ImGui::PopStyleColor(3); ImGui::PopStyleVar(2); ImGui::PopFont(); ImGui::End();
@@ -451,32 +757,32 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
       {"SHUTDOWN AND REBOOT","When the last cell breaks the courier shuts down, then reboots at the last checkpoint you activated (or the entry point) with full armour. In missions a reboot costs ten seconds and one of your three lives."},
       {"OUT OF LIVES","Lose all three lives and the sector restarts from the beginning, cores and all. Running out of time also ends a mission. Training has no clock and unlimited lives, so experiment freely."}};
     const float w=820*s,h=560*s,x=(display.x-w)*.5F,y=(display.y-h)*.5F;
-    fg->AddRectFilled({0,0},display,withAlpha(navy,.62F));
-    relay::drawPanel(fg,{x,y},{x+w,y+h},18*s,withAlpha(navy,.97F),withAlpha(mint,.75F),1.6F*s);
+    fg->AddRectFilled({0,0},display,withAlpha(IM_COL32(20,24,30,255),.35F));
+    const int popupStart=fg->VtxBuffer.Size;
+    relay::drawPanel(fg,{x,y},{x+w,y+h},18*s,surface,mint,1.6F*s);
     relay::drawScanlines(fg,{x+4*s,y+4*s},{x+w-4*s,y+h-4*s},4*s,withAlpha(mint,.03F));
     char tag[48]; std::snprintf(tag,sizeof(tag),"FIELD MANUAL  //  %d / %d",popupPage_+1,pages);
     fg->AddRectFilled({x+30*s,y+28*s},{x+38*s,y+36*s},amber);
     relay::drawTracked(fg,14*s,{x+48*s,y+22*s},amber,tag,3*s);
-    relay::drawGlow(fg,40*s,{x+28*s,y+42*s},ice,mint,manual[popupPage_].title,3*s);
+    relay::drawGlow(fg,40*s,{x+28*s,y+42*s},deepTeal,glowCyan,manual[popupPage_].title,3*s);
     // Buttons: hover lights them; a click (or the keys below) acts.
     const auto button=[&](ImVec2 a,ImVec2 b,const char* label,bool primary) {
       const bool hover=io.MousePos.x>=a.x&&io.MousePos.x<=b.x&&io.MousePos.y>=a.y&&io.MousePos.y<=b.y;
       const ImU32 fill=primary?withAlpha(hover?ice:mint,.95F):withAlpha(mint,hover?.25F:.08F);
       relay::drawSlanted(fg,a,b,10*s,fill,fill);
       const float tw=relay::drawTracked(nullptr,22*s,{},0,label,3*s,true);
-      relay::drawTracked(fg,22*s,{(a.x+b.x-tw)*.5F,a.y+8*s},primary?navy:ice,label,3*s,true);
+      relay::drawTracked(fg,22*s,{(a.x+b.x-tw)*.5F,a.y+8*s},primary?navy:graphite,label,3*s,true);
       return hover&&ImGui::IsMouseClicked(0);
     };
     // Close X in the corner.
     const ImVec2 xa(x+w-62*s,y+22*s),xb(x+w-26*s,y+58*s);
     const bool overClose=io.MousePos.x>=xa.x&&io.MousePos.x<=xb.x&&io.MousePos.y>=xa.y&&io.MousePos.y<=xb.y;
     fg->AddRect(xa,xb,withAlpha(mint,overClose?1.F:.5F),3*s,0,1.6F*s);
-    fg->AddLine({xa.x+10*s,xa.y+10*s},{xb.x-10*s,xb.y-10*s},withAlpha(ice,overClose?1.F:.7F),2.5F*s);
-    fg->AddLine({xb.x-10*s,xa.y+10*s},{xa.x+10*s,xb.y-10*s},withAlpha(ice,overClose?1.F:.7F),2.5F*s);
+    fg->AddLine({xa.x+10*s,xa.y+10*s},{xb.x-10*s,xb.y-10*s},withAlpha(graphite,overClose?1.F:.7F),2.5F*s);
+    fg->AddLine({xb.x-10*s,xa.y+10*s},{xa.x+10*s,xb.y-10*s},withAlpha(graphite,overClose?1.F:.7F),2.5F*s);
     // Illustration plate.
     const ImVec2 ia(x+30*s,y+104*s),ib(x+w-30*s,y+310*s);
-    fg->AddRectFilled(ia,ib,withAlpha(IM_COL32(4,14,24,255),.9F),8*s);
-    fg->AddRect(ia,ib,withAlpha(mint,.25F),8*s,0,1.2F*s);
+    relay::drawAcrylicRect(fg,ia,ib,8*s,1,IM_COL32(205,210,217,255));
     const float time=float(ImGui::GetTime()),cy=(ia.y+ib.y)*.5F;
     const auto arrow=[&](float x0,float x1) {
       fg->AddLine({x0,cy},{x1-10*s,cy},withAlpha(steel,.9F),3*s);
@@ -560,13 +866,17 @@ bool AppUi::draw(const BenchmarkSnapshot& benchmark, relay::Game& game, relay::R
       for(const char* c=manual[popupPage_].body;*c;++c) { if(*c==' ') flush(); else word+=*c; }
       flush(); if(!line.empty()) lines.push_back(line);
       float ty=ib.y+22*s;
-      for(const auto& t:lines) { relay::drawTracked(fg,size,{x+32*s,ty},withAlpha(ice,.92F),t.c_str(),1.5F*s); ty+=28*s; }
+      for(const auto& t:lines) { relay::drawTracked(fg,size,{x+32*s,ty},withAlpha(graphite,.92F),t.c_str(),1.5F*s); ty+=28*s; }
     }
     // Page dots, then the buttons.
     for(int i=0;i<pages;++i) fg->AddCircleFilled({x+40*s+float(i)*22*s,y+h-42*s},6*s,i==popupPage_?mint:withAlpha(steel,.4F),12);
     const bool last=popupPage_==pages-1;
     const bool next=button({x+w-230*s,y+h-66*s},{x+w-30*s,y+h-26*s},last?"GOT IT":"NEXT",true)||ImGui::IsKeyPressed(ImGuiKey_Enter,false)||ImGui::IsKeyPressed(ImGuiKey_Space,false)||ImGui::IsKeyPressed(ImGuiKey_RightArrow,false);
     const bool back=popupPage_>0&&(button({x+w-420*s,y+h-66*s},{x+w-250*s,y+h-26*s},"BACK",false)||ImGui::IsKeyPressed(ImGuiKey_LeftArrow,false));
+    {
+      const float age=float(ImGui::GetTime())-popupOpenedAt_;
+      if(age<.8F) relay::transformSince(fg,popupStart,{x+w*.5F,y+h*.5F},.05F*std::exp(-7.F*age)*std::sin(age*16),1-.2F*std::exp(-9.F*age)*std::cos(age*20));
+    }
     // Ignore the press that opened it, so a held key or click cannot skip the first page.
     if(float(ImGui::GetTime())-popupOpenedAt_>.2F) {
       if((overClose&&ImGui::IsMouseClicked(0))||ImGui::IsKeyPressed(ImGuiKey_Escape,false)||(next&&last)) popupPage_=-1;

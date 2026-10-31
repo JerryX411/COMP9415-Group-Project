@@ -67,9 +67,11 @@ class SceneModels {
                     std::vector<Instance>& output);
   void appendCheckpoint(const Checkpoint& checkpoint, float time, std::vector<Instance>& output);
   void appendSpeedPad(const SpeedPad& pad, float time, std::vector<Instance>& output);
+  void appendDrainTile(const DrainTile& tile, float time, std::vector<Instance>& output);
   void appendPlate(const PressurePlate& plate, float doorHold, float time, std::vector<Instance>& output);
   void appendDoor(const BlastDoor& door, float time, std::vector<Instance>& output);
-  void appendPickup(const Pickup& pickup, float time, std::vector<Instance>& output);
+  void appendPickup(const Pickup& pickup, float time, float respawnTime, std::vector<Instance>& output);
+  void appendPortal(const PortalLink& link, float time, std::vector<Instance>& output);
   void appendFacility(const Game& game, std::vector<Instance>& output);
   ArticulatedModel robot_, gate_;
   int hipL_ = 0, hipR_ = 0, shoulderL_ = 0, shoulderR_ = 0;

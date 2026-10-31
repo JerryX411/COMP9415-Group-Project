@@ -29,6 +29,49 @@ void LevelData::setHeight(int layers) {
     for (int z = minZ; z < maxZ; ++z)
       for (int x = minX; x < maxX; ++x) cells[index(x, y, z)] = old.cell(x, y, z);
 }
+void LevelData::shift(int dx, int dz) {
+  LevelData old = *this;
+  cells.assign(std::size_t(height * width() * depth()), Empty);
+  for (int y = 1; y <= height; ++y)
+    for (int z = minZ; z < maxZ; ++z)
+      for (int x = minX; x < maxX; ++x) cells[index(x, y, z)] = old.cell(x - dx, y, z - dz);
+  const glm::vec2 d{float(dx), float(dz)};
+  for (auto& c : cores) c += d;
+  for (auto& t : traps) { t.min += d; t.max += d; }
+  for (auto& s : switches) s.at += d;
+  for (auto& c : checkpoints) { c.at += d; c.respawn += d; }
+  for (auto& m : movers) { m.a += d; m.b += d; }
+  for (auto& o : doors) o.at += d;
+  for (auto& p : plates) p.at += d;
+  for (auto& p : pads) { p.min += d; p.max += d; }
+  for (auto& p : pickups) p.at += d;
+  for (auto& t : drains) { t.min += d; t.max += d; }
+  for (auto& p : portals) { p.from += d; p.to += d; }
+  spawn += d; gate += d;
+}
+void LevelData::growEdge(int edge, int n) {
+  const bool alongX = edge >= 2;
+  const int side = alongX ? width() : depth();
+  n = std::clamp(side + n, minSide, maxSide) - side;
+  if (n == 0) return;
+  // North and west grow (or shrink) at the far end and shift everything to keep it in place.
+  if (edge == 0) { if (n > 0) { resize(minX, minZ, maxX, maxZ + n); shift(0, n); } else { shift(0, n); resize(minX, minZ, maxX, maxZ + n); } }
+  if (edge == 1) resize(minX, minZ, maxX, maxZ + n);
+  if (edge == 2) { if (n > 0) { resize(minX, minZ, maxX + n, maxZ); shift(n, 0); } else { shift(n, 0); resize(minX, minZ, maxX + n, maxZ); } }
+  if (edge == 3) resize(minX, minZ, maxX + n, maxZ);
+}
+LevelData LevelData::blank(int w, int d, int layers) {
+  LevelData m;
+  m.name = "New map";
+  m.message = "Collect the cores, then reach the exit.";
+  m.minX = m.minZ = 4;
+  m.maxX = m.minX + std::clamp(w, minSide, maxSide); m.maxZ = m.minZ + std::clamp(d, minSide, maxSide);
+  m.height = std::clamp(layers, minHeight, maxHeight);
+  m.cells.assign(std::size_t(m.height * m.width() * m.depth()), Empty);
+  m.spawn = {float(m.minX) + 2.5F, float(m.maxZ) - 2.5F};
+  m.gate = {(float(m.minX) + float(m.maxX)) * .5F, float(m.minZ) + 3.F};
+  return m;
+}
 int LevelData::topLayer() const {
   for (int y = height; y >= 1; --y)
     for (int z = minZ; z < maxZ; ++z)
@@ -39,8 +82,8 @@ int LevelData::topLayer() const {
 namespace {
 char glyph(std::uint8_t material) { return material == LevelData::Empty ? '.' : material == LevelData::Wall ? '#' : material == LevelData::Low ? '=' : char('0' + std::min<int>(material, 9)); }
 std::uint8_t material(char c) { return c == '#' ? LevelData::Wall : c == '=' ? LevelData::Low : c >= '0' && c <= '9' ? std::uint8_t(c - '0') : LevelData::Empty; }
-const char* pickupName(int kind) { return kind == 1 ? "shield" : kind == 2 ? "clock" : "spring"; }
-int pickupKind(const std::string& name) { return name == "shield" ? 1 : name == "clock" ? 2 : 0; }
+const char* pickupName(int kind) { return kind == 1 ? "shield" : kind == 2 ? "clock" : kind == 3 ? "jet" : "spring"; }
+int pickupKind(const std::string& name) { return name == "shield" ? 1 : name == "clock" ? 2 : name == "jet" ? 3 : 0; }
 bool fail(std::string* error, const std::string& message) { if (error) *error = message; return false; }
 }  // namespace
 
@@ -52,6 +95,7 @@ bool LevelData::save(const std::filesystem::path& path, std::string* error) cons
   out << "name " << name << "\nmessage " << message << '\n';
   out << "room " << minX << ' ' << minZ << ' ' << maxX << ' ' << maxZ << '\n';
   out << "height " << height << '\n';
+  out << "wall " << wall << '\n';
   out << "time " << time << '\n';
   out << "spawn " << spawn.x << ' ' << spawn.y << ' ' << spawnYaw << '\n';
   out << "gate " << gate.x << ' ' << gate.y << '\n';
@@ -73,7 +117,9 @@ bool LevelData::save(const std::filesystem::path& path, std::string* error) cons
   for (const auto& d : doors) out << "door " << d.at.x << ' ' << d.at.y << ' ' << d.halfWidth << ' ' << (d.alongZ ? 'z' : 'x') << '\n';
   for (const auto& p : plates) out << "plate " << p.at.x << ' ' << p.at.y << ' ' << p.door << '\n';
   for (const auto& p : pads) out << "pad " << p.min.x << ' ' << p.min.y << ' ' << p.max.x << ' ' << p.max.y << ' ' << p.direction.x << ' ' << p.direction.y << '\n';
+  for (const auto& t : drains) out << "crimson " << t.min.x << ' ' << t.min.y << ' ' << t.max.x << ' ' << t.max.y << '\n';
   for (const auto& p : pickups) out << "pickup " << p.at.x << ' ' << p.at.y << ' ' << pickupName(p.kind) << '\n';
+  for (const auto& p : portals) out << "portal " << p.from.x << ' ' << p.from.y << ' ' << p.to.x << ' ' << p.to.y << '\n';
   if (!out) return fail(error, "write failed: " + path.string());
   return true;
 }
@@ -109,6 +155,8 @@ bool LevelData::load(const std::filesystem::path& path, LevelData& result, std::
     } else if (key == "height") {
       int h = 0; if (!sized || !(s >> h) || h < minHeight || h > maxHeight) return bad();
       d.setHeight(h);
+    } else if (key == "wall") {
+      if (!(s >> d.wall) || d.wall < minHeight || d.wall > maxHeight) return bad();
     } else if (key == "time") { if (!(s >> d.time)) return bad(); }
     else if (key == "spawn") { if (!(s >> d.spawn.x >> d.spawn.y)) return bad(); s >> d.spawnYaw; }
     else if (key == "gate") { if (!(s >> d.gate.x >> d.gate.y)) return bad(); }
@@ -124,7 +172,9 @@ bool LevelData::load(const std::filesystem::path& path, LevelData& result, std::
     else if (key == "door") { Door o; char axis = 'x'; if (!(s >> o.at.x >> o.at.y >> o.halfWidth)) return bad(); s >> axis; o.alongZ = axis == 'z'; d.doors.push_back(o); }
     else if (key == "plate") { Plate p; if (!(s >> p.at.x >> p.at.y >> p.door)) return bad(); d.plates.push_back(p); }
     else if (key == "pad") { Pad p; if (!(s >> p.min.x >> p.min.y >> p.max.x >> p.max.y >> p.direction.x >> p.direction.y)) return bad(); d.pads.push_back(p); }
+    else if (key == "crimson") { Drain t; if (!(s >> t.min.x >> t.min.y >> t.max.x >> t.max.y)) return bad(); d.drains.push_back(t); }
     else if (key == "pickup") { Pickup p; std::string kind; if (!(s >> p.at.x >> p.at.y >> kind)) return bad(); p.kind = pickupKind(kind); d.pickups.push_back(p); }
+    else if (key == "portal") { Portal p; if (!(s >> p.from.x >> p.from.y >> p.to.x >> p.to.y)) return bad(); d.portals.push_back(p); }
     else return bad();
   }
   if (!sized) return fail(error, path.filename().string() + ": no room line");

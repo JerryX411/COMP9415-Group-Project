@@ -8,11 +8,12 @@
 namespace relay {
 // A level as the map editor (RelayEditor) edits it and assets/levels/levelN.txt stores it.
 // Positions are floor coordinates (x, z); heights are fixed by each object type. The voxels
-// are `height` layers above the floor (y = 1..height, 3 to 8) inside the room, so a map can have
-// platforms, bridges and overhangs; the floor and the ring of outer walls (3 high) around the room
-// are generated from the room bounds.
+// are `height` layers above the floor (y = 1..height, 3 to 16) inside the room, so a map can have
+// platforms, bridges and overhangs; the floor and the ring of outer walls (`wall` high) around the
+// room are generated from the room bounds. The room keeps its north-west corner at (4, 4) and is
+// at most 59 x 59 cells (the voxel world is 64 across).
 struct LevelData {
-  static constexpr int minHeight = 3, maxHeight = 8;
+  static constexpr int minHeight = 3, maxHeight = 16, maxSide = 59, minSide = 4;
   // Voxel materials: 0 empty, 2 wall, 3 low block (other values are kept as they are).
   enum : std::uint8_t { Empty = 0, Wall = 2, Low = 3 };
   struct Trap { glm::vec2 min{}, max{}; float offset = 0; };
@@ -23,8 +24,14 @@ struct LevelData {
   struct Door { glm::vec2 at{}; float halfWidth = 1; bool alongZ = false; };
   struct Plate { glm::vec2 at{}; int door = 0; };
   struct Pad { glm::vec2 min{}, max{}, direction{1, 0}; };
-  // kind: 0 spring boots, 1 shield, 2 clock (same order as PowerUp).
+  // kind: 0 spring boots, 1 shield, 2 clock, 3 jetpack (same order as PowerUp).
   struct Pickup { glm::vec2 at{}; int kind = 0; };
+  // A crimson floor area: standing on it costs 5 s of the countdown (once a second).
+  struct Drain { glm::vec2 min{}, max{}; };
+  // A pair of floor portals: once both ends are activated, stepping into either sends the courier
+  // to the other. Items stand on top of whatever is built at their spot, so an end may sit on a
+  // raised platform.
+  struct Portal { glm::vec2 from{}, to{}; };
 
   std::string name, message;
   int minX = 4, minZ = 4, maxX = 28, maxZ = 28;  // Floor cells minX..maxX-1, minZ..maxZ-1.
@@ -33,6 +40,7 @@ struct LevelData {
   float spawnYaw = 0;
   glm::vec2 gate{25, 7};
   int height = 3;                   // Voxel layers above the floor.
+  int wall = 3;                     // Height of the outer walls around the room (3..maxHeight).
   std::vector<std::uint8_t> cells;  // height * depth * width, see index().
 
   std::vector<glm::vec2> cores;
@@ -44,6 +52,8 @@ struct LevelData {
   std::vector<Plate> plates;
   std::vector<Pad> pads;
   std::vector<Pickup> pickups;
+  std::vector<Drain> drains;
+  std::vector<Portal> portals;
 
   int width() const { return maxX - minX; }
   int depth() const { return maxZ - minZ; }
@@ -58,6 +68,13 @@ struct LevelData {
   void setHeight(int layers);
   // The highest layer with any voxel in it (0 when empty).
   int topLayer() const;
+  // Move everything (voxels and items) by whole cells; voxels pushed out of the room are lost.
+  void shift(int dx, int dz);
+  // Grow (n > 0) or shrink (n < 0) the room at one edge: 0 north, 1 south, 2 west, 3 east.
+  // Growing north or west shifts the contents so they stay where they are on the map.
+  void growEdge(int edge, int n);
+  // An empty room of the given size: spawn at the south-west, exit in the middle of the north.
+  static LevelData blank(int width, int depth, int layers);
 
   bool save(const std::filesystem::path& path, std::string* error = nullptr) const;
   static bool load(const std::filesystem::path& path, LevelData& out, std::string* error = nullptr);

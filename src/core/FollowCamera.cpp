@@ -5,7 +5,7 @@ namespace relay {
 void FollowCamera::reset(const Game& game) {
   // Start behind the courier's facing (the missions face north, training faces east).
   yaw_=game.player().yaw+.4F; pitch_=.52F; distance_=actualDistance_=8;
-  trauma_=0; shake_=glm::vec3(0); lastHurt_=game.player().hurtCooldown; lastLandAge_=10; lastHitAge_=game.player().motion.hitAge; lastSlideAge_=game.player().motion.slideAge; lastPopAge_=game.player().motion.popAge; lastBoostAge_=game.player().motion.boostAge; lastBounceAge_=game.player().motion.bounceAge; lastTakeoffAge_=game.player().motion.takeoffAge; tunnel_=tunnelLook_=exitHold_=exitLift_=0; orbitAge_=10; wasLost_=game.state()==RunState::Lost;
+  trauma_=0; shake_=glm::vec3(0); lastHurt_=game.player().hurtCooldown; lastLandAge_=10; lastHitAge_=game.player().motion.hitAge; lastSlideAge_=game.player().motion.slideAge; lastPopAge_=game.player().motion.popAge; lastBoostAge_=game.player().motion.boostAge; lastBounceAge_=game.player().motion.bounceAge; lastTakeoffAge_=game.player().motion.takeoffAge; lastTrickAge_=game.player().motion.trickAge; lastShieldBreak_=game.player().motion.shieldBreakAge; lastJetAge_=game.player().motion.jetAge; lastPushAge_=game.player().motion.pushAge; tunnel_=tunnelLook_=exitHold_=exitLift_=0; orbitAge_=10; wasLost_=game.state()==RunState::Lost;
   lastCelebrate_=game.player().motion.celebrateAge; kick_=kickVelocity_=drift_=glm::vec3(0); fovKick_=fovVelocity_=roll_=rollKick_=rollVelocity_=fovSprint_=0;
   lastStepAge_=lastLaunchAge_=10;
   target_=game.player().position+glm::vec3(0,1.1F,0);
@@ -67,6 +67,30 @@ void FollowCamera::update(const Game& game,float dt) {
   if(a.bounceAge<lastBounceAge_&&a.bounceAge<.1F) { trauma_+=.12F*a.bounceStrength; fovVelocity_-=20.F*a.bounceStrength; }
   if(a.takeoffAge<lastTakeoffAge_&&a.takeoffAge<.1F) { kickVelocity_.y+=2.6F; fovVelocity_+=30.F; trauma_+=.12F; }
   lastTakeoffAge_=a.takeoffAge;
+  // Tricks between moves: the view rolls with the turn and lifts a little; boosted ones also
+  // punch the lens and jolt.
+  if(a.trickAge<lastTrickAge_&&a.trickAge<.1F) {
+    const int k=a.trickKind;
+    const bool boosted=k==5||k>=7||game.player().boost!=Boost::None;
+    rollVelocity_+=k==1?.6F:k==3||k==5||k==6||k==7?.35F:.15F; kickVelocity_.y+=1.2F;
+    if(boosted) { fovVelocity_+=45.F; trauma_+=.12F; }
+  }
+  lastTrickAge_=a.trickAge;
+  // Shield break: a light shake, a quick lens squeeze and a small drop.
+  if(a.shieldBreakAge<lastShieldBreak_&&a.shieldBreakAge<.1F) { trauma_+=.3F; fovVelocity_-=30.F; kickVelocity_.y-=1.6F; rollVelocity_+=.3F; }
+  lastShieldBreak_=a.shieldBreakAge;
+  // Jetpack burst: a hard punch outward, the lens thrown wide and the eye pulled back.
+  if(a.jetAge<lastJetAge_&&a.jetAge<.1F) {
+    trauma_+=.32F; fovVelocity_+=110.F; kickVelocity_.y+=1.4F;
+    const glm::vec2 v=game.player().locomotion;
+    if(glm::length(v)>.1F) kickVelocity_-=glm::vec3(v.x,0,v.y)/glm::length(v)*4.F;
+  }
+  lastJetAge_=a.jetAge;
+  // A wall shove nudges the view back.
+  if(a.pushAge<lastPushAge_&&a.pushAge<.1F) { kickVelocity_.y-=.8F; trauma_+=.08F; fovVelocity_-=15.F; }
+  lastPushAge_=a.pushAge;
+  // The rest of a jet boost keeps the view shaking a little.
+  if(game.jetting()) trauma_=std::max(trauma_,.22F);
   lastStepAge_=a.stepAge; lastLaunchAge_=a.launchAge; lastSlideAge_=a.slideAge; lastPopAge_=a.popAge; lastBoostAge_=a.boostAge; lastBounceAge_=a.bounceAge;
   if(lost&&!wasLost_) { trauma_+=1.F; fovVelocity_+=110.F; kickVelocity_.y-=5.F; }
   if(lost&&a.slapAge<lastSlap_&&a.slapAge<.1F) { trauma_+=.4F; kickVelocity_.y-=4.5F; }
