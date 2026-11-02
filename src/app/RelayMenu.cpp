@@ -43,8 +43,8 @@ MenuAction drawMenu(MenuMode mode,int& level,float,bool){
  const float x=size.x*.5F-230*s,top=size.y*.5F-235*s;
  if(pause){d->AddRectFilled({x-36*s,top-45*s},{x+496*s,top+410*s},background,5*s);}
  center(d,top,44*s,ink,pause?"Paused":"Core Explorer Lite");
- center(d,top+65*s,20*s,muted,pause?"Game paused":"Basic movement playground");
- const std::string levelLabel=std::string("Level: ")+(level==0?"Test Yard":"Obstacle Yard")+"   < >";
+ center(d,top+65*s,20*s,muted,pause?"Game paused":"Collect cores and reach the exit");
+ const std::string levelLabel=std::string("Level: ")+(level==0?"Tutorial Yard":"Obstacle Yard")+"   < >";
  const char* labels[]{pause?"Resume":"Start game",pause?"Restart":levelLabel.c_str(),"Settings",pause?"Main menu":"Quit"};
  int activated=-1;auto mouse=ImGui::GetIO().MousePos;bool moved=std::abs(mouse.x-lastMouse.x)+std::abs(mouse.y-lastMouse.y)>.5F;lastMouse=mouse;
  for(int i=0;i<4;++i){ImVec2 a{x,top+(120+i*65)*s},b{x+460*s,a.y+54*s};

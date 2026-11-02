@@ -77,6 +77,7 @@ int main(int argc,char** argv) {
     if(action==relay::MenuAction::Quit)window.requestClose();
     if(action==relay::MenuAction::Settings){settingsPause=screen==Screen::Pause;screen=Screen::Settings;}
    } else { const bool unused=ui.draw({},game,options,renderer,focused); (void)unused; }
+   if(int next=ui.takeLevelRequest();next>=0){level=next;game.reset(level);camera.reset(game);}
    ui.render();
    if(glGetError()!=GL_NO_ERROR) throw std::runtime_error("OpenGL error");
    if(frames>0&&++count>=frames) {if(!capture.empty())relay::saveScreenshot(capture,w,h);std::cout<<"lite_smoke level="<<level<<" health="<<game.player().health<<" intro=none gl_error=0\n";window.requestClose();}

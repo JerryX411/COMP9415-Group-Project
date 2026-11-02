@@ -188,6 +188,7 @@ void Game::reset(int level) {
  elapsed_=0; remaining_=0; gateOpen_=0; crouchToggle_=false; hitStop_=0;
  player_=Player{}; spawn_={8,1,25}; player_.position=spawn_; player_.motion.spawnAge=10;
  room_={{4,1,4},{36,4,36}}; wallHeight_=3;
+ cores_.clear(); interactionIndex_=-1; interactionCommitted_=false;
  traps_.clear(); switches_.clear(); movers_.clear(); particles_.fill(Particle{});
  world_.clear(); buildShell();
  // A jumpable block and a full-width one-cell crawl passage.
@@ -205,19 +206,45 @@ void Game::reset(int level) {
   movers_.push_back({{14,1.75F,16},{29,1.75F,16},{14,1.75F,16},{.65F,.75F,.65F},7,0});
   world_.fill(28,1,8,31,2,11,2);
  }
- message_="WASD move  /  SPACE jump  /  C toggle crouch  /  E switch"; messageTime_=5;
+ cores_={{{9,1.8F,22},false},{{16.5F,1.8F,23},false},{{28,1.8F,13},false}};
+ if(level_==1) cores_={{{8,1.8F,22},false},{{24.5F,1.8F,23},false},{{29,2.8F,9},false}};
+ message_="Collect 3 cores with E, then walk through the exit."; messageTime_=5;
 }
 const std::vector<Bounds>& Game::fixtures() const {
  fixtures_.clear();
  for(const auto& sw:switches_) fixtures_.push_back({sw.position+glm::vec3(-.375F,0,-.325F),sw.position+glm::vec3(.375F,1.05F,.325F)});
+ const auto g=gatePosition();
+ for(float side:{-1.F,1.F}) {
+  const auto post=g+glm::vec3(side*1.8F,1.5F,0);
+  fixtures_.push_back({post-glm::vec3(.2F,1.5F,.3F),post+glm::vec3(.2F,1.5F,.3F)});
+  const auto door=g+glm::vec3(side*(.8F+gateOpen_*1.6F),1.4F,0);
+  fixtures_.push_back({door-glm::vec3(.8F,1.4F,.2F),door+glm::vec3(.8F,1.4F,.2F)});
+ }
+ fixtures_.push_back({g+glm::vec3(-2,2.8F,-.3F),g+glm::vec3(2,3.2F,.3F)});
  return fixtures_;
 }
-const char* Game::nameOf(int level) { return level==0?"TEST YARD":"OBSTACLE YARD"; }
-bool Game::gateUnlocked() const { return false; }
-int Game::collectedCount() const { return 0; }
+const char* Game::nameOf(int level) { return level==0?"TUTORIAL YARD":"OBSTACLE YARD"; }
+bool Game::gateUnlocked() const { return !cores_.empty() && collectedCount()==int(cores_.size()); }
+int Game::collectedCount() const { return int(std::count_if(cores_.begin(),cores_.end(),[](const Core& c){return c.collected;})); }
 int Game::liveParticleCount() const { return 0; }
 float Game::boostMeter() const { return 0; }
-Interaction Game::availableInteraction() const { return nearestSwitch()>=0?Interaction::Switch:Interaction::None; }
+int Game::nearestCore() const {
+ float closest=1.8F; int result=-1; const auto hand=player_.position+glm::vec3(0,.8F,0);
+ for(std::size_t i=0;i<cores_.size();++i) if(!cores_[i].collected) {
+  const auto delta=cores_[i].position-hand; const float dist=glm::length(delta);
+  if(dist>=closest)continue;
+  bool clear=true; for(int j=1;j<20;++j) {auto q=hand+delta*(float(j)/20);if(world_.cell(int(std::floor(q.x)),int(std::floor(q.y)),int(std::floor(q.z)))){clear=false;break;}}
+  if(clear){closest=dist;result=int(i);}
+ }
+ return result;
+}
+const char* Game::tutorialHint() const {
+ if(gateUnlocked())return "Exit ready: walk through the green door at the far right.";
+ if(collectedCount()==0)return "1. Move to the blue core near the start. Press your interact key.";
+ if(collectedCount()==1)return "2. Jump over the low block; crouch to pass under the tunnel.";
+ return "3. Avoid moving blocks and spikes. Collect the last core to open the exit.";
+}
+Interaction Game::availableInteraction() const { return nearestCore()>=0?Interaction::Core:nearestSwitch()>=0?Interaction::Switch:Interaction::None; }
 void Game::warpPlayer(glm::vec3 p) { player_.position=p; player_.velocity={0,0,0}; player_.locomotion={0,0}; player_.grounded=false; }
 void Game::moveAxis(int axis,float distance) {
  if(distance==0) return;
@@ -247,16 +274,21 @@ void Game::updateInteraction(float dt,bool pressed) {
  if(player_.interactionTime>0) {
   player_.interactionTime=std::max(0.F,player_.interactionTime-dt);
   if(!interactionCommitted_&&player_.interactionTime<.2F) {
-   interactionCommitted_=true; auto& sw=switches_.at(interactionIndex_);
-   traps_.at(sw.trap).disabledFor=5; sw.animation=1;
-   message_="Spikes retracted for 5 seconds."; messageTime_=3;
+   interactionCommitted_=true;
+   if(player_.interaction==Interaction::Core) {
+    if(nearestCore()==interactionIndex_) {cores_[interactionIndex_].collected=true;message_=gateUnlocked()?"All cores collected. Exit unlocked.":"Core collected.";messageTime_=2;}
+   } else if(player_.interaction==Interaction::Switch&&nearestSwitch()==interactionIndex_) {
+    auto& sw=switches_.at(interactionIndex_);traps_.at(sw.trap).disabledFor=5;sw.animation=1;
+    message_="Spikes retracted for 5 seconds.";messageTime_=3;
+   }
   }
-  if(player_.interactionTime==0) player_.interaction=Interaction::None;
+  if(player_.interactionTime==0)player_.interaction=Interaction::None;
  }
  if(pressed&&player_.interactionTime==0&&player_.hitStun==0) {
-  const int i=nearestSwitch(); if(i<0) return;
-  interactionIndex_=i; interactionCommitted_=false; player_.interaction=Interaction::Switch;
-  player_.interactionTarget=switches_[i].position+glm::vec3(0,1,0); player_.interactionTime=.4F;
+  const auto kind=availableInteraction(); if(kind==Interaction::None)return;
+  interactionIndex_=kind==Interaction::Core?nearestCore():nearestSwitch();interactionCommitted_=false;
+  player_.interaction=kind;player_.interactionTime=.4F;
+  player_.interactionTarget=kind==Interaction::Core?cores_[interactionIndex_].position:switches_[interactionIndex_].position+glm::vec3(0,1,0);
  }
 }
 void Game::update(float seconds,const Input& input) {
@@ -273,6 +305,7 @@ void Game::step(float dt,const Input& input) {
  for(auto& sw:switches_) sw.animation=std::max(0.F,sw.animation-3*dt);
  updateMovers(dt); if(state_!=RunState::Playing) return;
  updateInteraction(dt,input.interactPressed);
+ if(gateUnlocked())gateOpen_=std::min(1.F,gateOpen_+dt*1.5F);
  const auto previous=player_.position;
  if(input.crouchPressed) crouchToggle_=!crouchToggle_;
  if(crouchToggle_||input.crouchHeld) player_.crouching=true;
@@ -298,6 +331,9 @@ void Game::step(float dt,const Input& input) {
  player_.grounded=false; moveAxis(1,player_.velocity.y*dt);
  for(std::size_t i=0;i<traps_.size();++i) if(trapPhase(i)==TrapPhase::Active&&traps_[i].touchesFeet(player_.position,footRadius)) applyDamage((traps_[i].area.min+traps_[i].area.max)*.5F,int(i));
  if(player_.position.y<-5) { state_=RunState::Lost; player_.health=0; }
+ if(state_==RunState::Playing&&gateUnlocked()&&gateOpen_>.98F&&std::abs(player_.position.x-gatePosition().x)<1.1F&&player_.position.z<gatePosition().z-.35F&&player_.position.z>gatePosition().z-1.8F&&player_.position.y<1.5F) {
+  state_=RunState::Won;player_.velocity={0,0,0};player_.locomotion={0,0};player_.moveBlend=0;player_.interaction=Interaction::None;
+ }
  updateAnimation(dt,previous,turn);
 }
 void Game::updateAnimation(float dt,glm::vec3 previous,float turn) {

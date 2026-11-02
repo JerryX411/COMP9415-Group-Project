@@ -267,6 +267,19 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
  auto root=glm::translate(glm::mat4(1),p.position+glm::vec3(0,bodyHop(p),0));
  root=glm::scale(glm::rotate(root,p.yaw,{0,1,0}),bodyScale(p));
  robot_.append(root,out);
+ for(const auto& c:game.cores())if(!c.collected) {
+  appendBox(out,c.position-glm::vec3(0,.65F,0),{.65F,.1F,.65F},{.28F,.32F,.36F});
+  appendBox(out,c.position,{.42F,.55F,.42F},{.25F,.65F,.85F},.12F,0);
+ }
+ const auto g=game.gatePosition();
+ const glm::vec3 lamp=game.gateUnlocked()?glm::vec3(.3F,.7F,.4F):glm::vec3(.8F,.35F,.25F);
+ for(float side:{-1.F,1.F}) {
+  appendBox(out,g+glm::vec3(side*1.8F,1.5F,0),{.4F,3,.6F},{.45F,.48F,.5F});
+  appendBox(out,g+glm::vec3(side*(.8F+game.gateOpen()*1.6F),1.4F,0),{1.6F,2.8F,.4F},{.32F,.36F,.4F});
+ }
+ appendBox(out,g+glm::vec3(0,3,0),{4,.4F,.6F},{.45F,.48F,.5F});
+ appendBox(out,g+glm::vec3(0,3,.32F),{1.2F,.16F,.06F},lamp,.1F);
+ appendBox(out,g+glm::vec3(0,.015F,-.9F),{3,.03F,1.3F},lamp);
  for(const auto& sw:game.switches()) appendSwitch(sw.position,game.trapPhase(sw.trap)==TrapPhase::Disabled,sw.animation,out);
  for(std::size_t i=0;i<game.traps().size();++i) {
   const auto& t=game.traps()[i]; const auto phase=game.trapPhase(i);

@@ -216,6 +216,10 @@ class Game {
  bool collidesWithScene(const Bounds& box) const{return blocked(box);}
  bool playerIntersectsScene() const{return blockedPlayer(player_.position);}
  TrapPhase trapPhase(std::size_t index) const; float trapPhaseRemaining(std::size_t index) const;
+ int nearestCore() const;
+ glm::vec3 gatePosition() const{return {32,1,7};}
+ float gateOpen() const{return gateOpen_;}
+ const char* tutorialHint() const;
  int nearestSwitch() const; Interaction availableInteraction() const;
  float shadowHeight() const; const char* levelName() const{return nameOf(level_);} static const char* nameOf(int level);
  float bodyHeight() const{return player_.crouching?crouchHeight:playerHeight;}

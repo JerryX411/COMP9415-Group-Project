@@ -60,19 +60,29 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  drawAcrylicRect(d,{28*s,28*s},{350*s,132*s},12*s,.88F);
  drawTracked(d,22*s,{48*s,42*s},graphiteSoft,"ROBOT  /  ARMOUR",2*s,true);
  for(int i=0;i<5;++i) drawSlanted(d,{48*s+i*55*s,84*s},{92*s+i*55*s,108*s},6*s,i<game.player().health?IM_COL32(76,119,153,255):IM_COL32(208,211,216,255),steel);
- drawAcrylicRect(d,{size.x-340*s,28*s},{size.x-28*s,110*s},12*s,.88F);
+ drawAcrylicRect(d,{size.x-340*s,28*s},{size.x-28*s,132*s},12*s,.88F);
  drawTracked(d,26*s,{size.x-320*s,48*s},graphite,game.levelName(),1*s,true);
+ const std::string progress="CORES  "+std::to_string(game.collectedCount())+" / "+std::to_string(game.cores().size())+(game.gateUnlocked()?"   EXIT OPEN":"");
+ drawTracked(d,20*s,{size.x-320*s,90*s},graphite,progress.c_str(),0);
+ drawAcrylicRect(d,{28*s,208*s},{850*s,258*s},3*s,1);
+ drawTracked(d,19*s,{44*s,222*s},graphite,game.tutorialHint(),0);
  drawAcrylicRect(d,{28*s,size.y-88*s},{size.x-28*s,size.y-28*s},10*s,.84F);
  const auto key=[](KeyAction a){return KeyBindings::keyName(keyBindings()[a]);};
  const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE";
  drawTracked(d,20*s,{48*s,size.y-70*s},graphite,controls.c_str(),.8F*s,true);
- if(game.nearestSwitch()>=0&&game.state()==RunState::Playing) {
+ if(game.availableInteraction()!=Interaction::None&&game.state()==RunState::Playing) {
   drawAcrylicRect(d,{size.x*.5F-225*s,size.y-180*s},{size.x*.5F+225*s,size.y-110*s},12*s,.94F);
-  drawTracked(d,27*s,{size.x*.5F-195*s,size.y-160*s},graphite,(key(KeyAction::Interact)+"  /  RETRACT SPIKES").c_str(),1*s,true);
+  drawTracked(d,27*s,{size.x*.5F-195*s,size.y-160*s},graphite,(key(KeyAction::Interact)+(game.availableInteraction()==Interaction::Core?"  /  COLLECT CORE":"  /  RETRACT SPIKES")).c_str(),1*s,true);
  }
  if(game.messageTime()>0) {
   drawAcrylicRect(d,{28*s,146*s},{720*s,196*s},9*s,.9F);
   drawTracked(d,19*s,{44*s,160*s},graphite,game.message().c_str(),.3F*s);
+ }
+ if(game.state()==RunState::Won) {
+  drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+160*s},3*s,1);
+  drawTracked(d,38*s,{size.x*.5F-210*s,size.y*.4F+24*s},graphite,"LEVEL COMPLETE",0);
+  drawTracked(d,23*s,{size.x*.5F-230*s,size.y*.4F+90*s},graphite,(key(KeyAction::Restart)+" RESTART   |   ENTER NEXT LEVEL").c_str(),0);
+  if(ImGui::IsKeyPressed(ImGuiKey_Enter,false))levelRequest_=1-game.level();
  }
  if(game.state()==RunState::Lost) {
   drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+160*s},14*s,.97F);
