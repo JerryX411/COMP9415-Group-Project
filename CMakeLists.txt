@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(Craft LANGUAGES C CXX)
+project(CoreExplorerLite LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -72,47 +72,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(stb)
 
-# miniaudio: sound playback (one file; public domain or MIT No Attribution). Only its source is
-# needed (SOURCE_SUBDIR skips its own CMake project); Ogg Vorbis decoding comes from stb_vorbis.
-FetchContent_Declare(
-    miniaudio
-    GIT_REPOSITORY https://github.com/mackron/miniaudio.git
-    GIT_TAG 0.11.25
-    GIT_SHALLOW TRUE
-    SOURCE_SUBDIR do-not-build
-)
-FetchContent_MakeAvailable(miniaudio)
-
 add_library(stb_headers INTERFACE)
 add_library(stb::headers ALIAS stb_headers)
 target_include_directories(stb_headers SYSTEM INTERFACE
     ${stb_SOURCE_DIR}
 )
 
-# FastNoise2 is optional: the authored whitebox levels do not use noise.
-option(RELAY_USE_FASTNOISE "Build the starter's optional noise library" OFF)
-if(RELAY_USE_FASTNOISE)
-# FastNoise2: deterministic SIMD terrain generation for later exercises.
-set(FASTNOISE2_TOOLS OFF CACHE BOOL "" FORCE)
-set(FASTNOISE2_TESTS OFF CACHE BOOL "" FORCE)
-set(FASTNOISE2_UTILITY OFF CACHE BOOL "" FORCE)
-set(FASTNOISE2_STRICT_FP ON CACHE BOOL "" FORCE)
-FetchContent_Declare(
-    fastnoise2
-    GIT_REPOSITORY https://github.com/Auburn/FastNoise2.git
-    GIT_TAG v1.1.1
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(fastnoise2)
-
-# FastNoise2/FastSIMD uses __regcall, which Apple Clang ignores on ARM64.
-if(APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    if(TARGET FastSIMD_FastNoise)
-        target_compile_options(FastSIMD_FastNoise PRIVATE -Wno-ignored-attributes)
-    endif()
-endif()
-
-endif()
 add_subdirectory(src)
 
 if(BUILD_TESTING)

@@ -180,7 +180,7 @@ void Renderer::prepare(const Game& game, const RenderOptions& options, float gal
   }
   instances_.clear();
   if(options.menu) models_.appendMenu(galleryTime,instances_,options.menuLook);
-  else if(options.gallery) models_.appendGallery(galleryTime,instances_,options.motionPreview);
+  else if(options.gallery) models_.append(game,instances_);
   else models_.append(game,instances_,options.wakeTime);
   playerPosition_=game.player().position;
   lightCount_=0; if(!options.menu&&!options.gallery) gatherLights(game);
@@ -275,33 +275,7 @@ void Renderer::gatherLights(const Game& game) {
   struct Light { glm::vec4 position, colour; float weight; };
   std::vector<Light> lights;
   const auto add=[&](glm::vec3 p,float radius,glm::vec3 colour,float intensity) { if(intensity>.03F) lights.push_back({{p,radius},{colour,intensity},intensity*radius}); };
-  for(const auto& p:game.particles()) if(p.remaining>0) {
-    const float life=p.remaining/p.lifetime,age=p.lifetime-p.remaining;
-    if(p.kind==ParticleKind::Glow&&p.size>=.3F) add(p.position,1.5F+p.size*3.5F,p.colour,2.2F*life);
-    if(p.kind==ParticleKind::Fireball) add(p.position,2.5F+p.size*(1+p.growth*std::sqrt(age))*2.F,p.colour,2.6F*life);
-    if(p.kind==ParticleKind::Arc) add(p.position+p.extent*.5F,2.4F,p.colour,1.8F*life);
-    if(p.kind==ParticleKind::Pillar) add(p.position+glm::vec3(0,1.2F,0),4.5F,p.colour,2.4F*life);
-    if(p.kind==ParticleKind::Shell) add(p.position,2.F+p.growth*1.5F,p.colour,3.2F*life*life);
-  }
-  for(const auto& core:game.cores()) if(!core.collected) add(core.position,2.6F,{.35F,1,.88F},.55F+.15F*std::sin(game.elapsed()*3.1F));
-  for(std::size_t i=0;i<game.traps().size();++i) if(game.trapPhase(i)==TrapPhase::Active) add((game.traps()[i].area.min+game.traps()[i].area.max)*.5F+glm::vec3(0,.35F,0),3.4F,{1,.35F,.15F},.9F);
-  if(game.gateUnlocked()) add(game.gatePosition()+glm::vec3(0,1.5F,-.6F),3.5F,{.35F,1,.88F},.6F);
-  for(const auto& checkpoint:game.checkpoints()) add(checkpoint.position+glm::vec3(0,1.2F,0),checkpoint.active?3.F:1.8F,checkpoint.active?glm::vec3(.35F,1,.9F):glm::vec3(1,.6F,.15F),checkpoint.active?.7F:.25F);
-  for(const auto& pad:game.speedPads()) if(pad.flash>.05F) add((pad.area.min+pad.area.max)*.5F+glm::vec3(0,.4F,0),3.5F,{.45F,.85F,1},1.6F*pad.flash);
-  for(const auto& tile:game.drainTiles()) add((tile.area.min+tile.area.max)*.5F+glm::vec3(0,.4F,0),2.6F,{.8F,.06F,.1F},.35F*crimsonFlicker(game.elapsed(),tile.area.min.x+tile.area.min.z)+1.4F*tile.flash);
-  for(const auto& item:game.pickups()) if(item.respawn<=0&&!item.taken) add(item.position+glm::vec3(0,.9F,0),2.2F,pickupColour(item.kind),.5F);
-  for(const auto& link:game.portals()) for(int end=0;end<2;++end) if(end==0?link.fromOn:link.toOn)
-    add((end==0?link.from:link.to)+glm::vec3(0,.5F,0),2.4F,link.linked()?glm::vec3(.35F,1,.9F):glm::vec3(1,.62F,.2F),.45F+1.2F*link.pulse);
-  for(const auto& door:game.doors()) add(door.centre+glm::vec3(0,.8F,0),2.4F,door.hold>0?glm::vec3(.35F,1,.9F):glm::vec3(1,.3F,.15F),.35F);
-  std::sort(lights.begin(),lights.end(),[](const Light& a,const Light& b) { return a.weight>b.weight; });
-  lightCount_=std::min<int>(maxLights,int(lights.size()));
-  for(int i=0;i<lightCount_;++i) { lightPosition_[std::size_t(i)]=lights[std::size_t(i)].position; lightColour_[std::size_t(i)]=lights[std::size_t(i)].colour; }
+  for(std::size_t i=0;i<game.traps().size();++i) if(game.trapPhase(i)==TrapPhase::Warning)
+    add((game.traps()[i].area.min+game.traps()[i].area.max)*.5F,2.F,{1,.6F,.15F},.3F);
 }
-glm::vec2 Renderer::project(glm::vec3 point,float width,float height) const {
-  auto p=viewProjection_*glm::vec4(point,1);
-  if(p.w<=0) return {-10000,-10000};
-  p/=p.w;
-  if(std::abs(p.x)>1.1F||std::abs(p.y)>1.1F||p.z>1) return {-10000,-10000};
-  return {(p.x*.5F+.5F)*width,(.5F-p.y*.5F)*height};
-}
-}
+} // namespace relay

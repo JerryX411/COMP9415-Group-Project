@@ -2,19 +2,19 @@
 #include "imgui.h"
 #include "core/KeyBindings.h"
 namespace relay {
-enum class MenuAction { None,Start,Resume,Gallery,Title,Quit,Checkpoint,Restart,Settings,Practice };
+enum class MenuAction { None,Start,Resume,Title,Quit,Restart,Settings };
 // The title screen or the pause menu (Esc).
 enum class MenuMode { Title,Pause };
 MenuAction drawMenu(MenuMode mode,int& level,float time,bool hasCheckpoint=false);
 // The highlighted row of the title/pause menu and of the settings page (for menu sounds).
 int menuSelection();
 int settingsSelection();
-void drawArrival(float time);
+
 // Control settings: rebind keys. pressedKey is the first key pressed this frame (or -1);
 // escape cancels a capture or leaves. Returns true when the player leaves.
 bool drawSettings(KeyBindings& keys,float time,int pressedKey,bool escape,bool overGame);
 // Blackout between levels: black is the cover, card the title card's opacity.
-void drawLevelTransition(float black,float card,float progress,int level,float time);
+
 
 // Holographic interface palette shared by menus and HUD.
 namespace palette {

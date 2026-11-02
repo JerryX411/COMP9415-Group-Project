@@ -15,3 +15,6 @@ RelayEditor.exe
 
 # Local audio extraction cache.
 /rsx_cache_db.bin
+
+/core_explorer_lite_keys.ini
+/CoreExplorerLite.exe

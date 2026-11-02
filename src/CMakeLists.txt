@@ -69,9 +69,6 @@ target_include_directories(Craft PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
 )
-# Sound (app/Audio*.cpp): miniaudio, with stb_vorbis for Ogg.
-target_include_directories(Craft SYSTEM PRIVATE ${miniaudio_SOURCE_DIR})
-
 target_link_libraries(Craft PRIVATE
     craft_core
     glfw
@@ -83,6 +80,7 @@ endif()
 
 # Keep the existing Pixi command (`build/Craft`) stable after adding src/.
 set_target_properties(Craft PROPERTIES
+    OUTPUT_NAME CoreExplorerLite
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}
 )
 
