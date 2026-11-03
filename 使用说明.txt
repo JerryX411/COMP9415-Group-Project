@@ -1,0 +1,17 @@
+﻿Core Explorer Lite — Windows 64 位离线编译包
+
+1. 把整个 ZIP 全部解压到一个可写文件夹，推荐短英文路径，例如 E:\CoreExplorerLite。不要在压缩软件中直接运行。
+2. 想重新编译并运行：双击 BuildAndRun.cmd。等待编译完成后游戏会自动打开。
+3. 只想试玩：双击 Play.cmd。
+4. 修改游戏代码：编辑 src 文件夹内的代码，再双击 BuildAndRun.cmd。
+5. 编译完成的程序在 build/CoreExplorerLite.exe，旁边的 assets 必须保留。
+
+不需要另外安装 CMake、MinGW、Python 或 VS Code，不需要联网下载依赖。
+需要 Windows 64 位以及支持 OpenGL 3.3 的显卡驱动。
+若编译失败，请保留窗口并发送错误文字。移动整个包后再次编译会自动备份旧 build 并重新配置。
+
+操作：WASD 移动，鼠标转镜头，空格跳跃，C 切换下蹲，E 拾取核心/操作机关，R 重开，Esc 暂停。
+集齐 3 个核心后门会打开，穿过出口通关，Enter 进入下一关。
+
+只包含 Lite 游戏；不包含高级版、地图编辑器和 Apex 音频素材。
+vendor 保存依赖及各自许可证；toolchain 是便携 w64devkit 工具目录，保留其许可证和来源文件。

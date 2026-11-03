@@ -1,0 +1,1 @@
+ ../src/libcraft_core.a ../vendor/glm/glm/libglm.a ../vendor/glfw/src/libglfw3.a -limm32 -luser32 ../libcraft_glad_gl_core_33.a -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

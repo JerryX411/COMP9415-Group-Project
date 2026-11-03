@@ -1,0 +1,13 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/cmake_install.cmake",
+		"C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/vendor/glfw/cmake_install.cmake",
+		"C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/vendor/glfw/src/cmake_install.cmake",
+		"C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/vendor/glm/cmake_install.cmake",
+		"C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/vendor/glm/glm/cmake_install.cmake",
+		"C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/src/cmake_install.cmake",
+		"C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

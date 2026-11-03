@@ -1,0 +1,19 @@
+Start testing: Nov 03 19:16 澳大利亚东部夏令时
+----------------------------------------------------------
+1/1 Testing: lite_gameplay
+1/1 Test: lite_gameplay
+Command: "C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/tests/lite_tests.exe"
+Directory: C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/build/tests
+"lite_gameplay" start time: Nov 03 19:16 澳大利亚东部夏令时
+Output:
+----------------------------------------------------------
+Lite: movement, jump/land, toggle/headroom/tunnel, interaction, spike timing/height/cooldown, moving collision and reset passed.
+<end of output>
+Test time =   0.29 sec
+----------------------------------------------------------
+Test Passed.
+"lite_gameplay" end time: Nov 03 19:16 澳大利亚东部夏令时
+"lite_gameplay" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Nov 03 19:16 澳大利亚东部夏令时

@@ -1,0 +1,6 @@
+set(CMAKE_RC_COMPILER "C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/bin/windres.exe")
+set(CMAKE_RC_COMPILER_ARG1 "")
+set(CMAKE_RC_COMPILER_LOADED 1)
+set(CMAKE_RC_SOURCE_FILE_EXTENSIONS rc;RC)
+set(CMAKE_RC_OUTPUT_EXTENSION .obj)
+set(CMAKE_RC_COMPILER_ENV_VAR "RC")

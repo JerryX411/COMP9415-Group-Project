@@ -1,0 +1,30 @@
+CMakeFiles/craft_glad_gl_core_33.dir/vendor/glad/src/gl.c.obj: \
+ C:\Users\yulia\Documents\xwechat_files\wxid_g8ssaugpqy0311_7819\msg\file\2026-11\Core-Explorer-Lite-Offline-Build-Windows-x64\Core-Explorer-Lite\vendor\glad\src\gl.c \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/stdio.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/corecrt_stdio_config.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/corecrt.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/_mingw.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/_mingw_mac.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/_mingw_secapi.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/vadefs.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/_mingw_off_t.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/swprintf.inl \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/sec_api/stdio_s.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/stdlib.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/corecrt_wstdlib.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/lib/gcc/x86_64-w64-mingw32/16.2.0/include/limits.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/lib/gcc/x86_64-w64-mingw32/16.2.0/include/syslimits.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/limits.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/crtdefs.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/sec_api/stdlib_s.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/malloc.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/lib/gcc/x86_64-w64-mingw32/16.2.0/include/mm_malloc.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/errno.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/string.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/sec_api/string_s.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/vendor/glad/include/glad/gl.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/vendor/glad/include/KHR/khrplatform.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/lib/gcc/x86_64-w64-mingw32/16.2.0/include/stdint.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/stdint.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/lib/gcc/x86_64-w64-mingw32/16.2.0/include/stddef.h \
+ C:/Users/yulia/Documents/xwechat_files/wxid_g8ssaugpqy0311_7819/msg/file/2026-11/Core-Explorer-Lite-Offline-Build-Windows-x64/Core-Explorer-Lite/toolchain/include/stddef.h
