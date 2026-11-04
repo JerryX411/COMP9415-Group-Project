@@ -2,6 +2,7 @@
 #include <vector>
 #include "graphics/RelayModels.h"
 #include "graphics/Shader.h"
+#include "graphics/Skybox.h"
 #include "core/FollowCamera.h"
 
 namespace relay {
@@ -30,6 +31,8 @@ class Renderer {
   // Geometry preparation is outside the measured render boundary.
   void prepare(const Game& game, const RenderOptions& options, float galleryTime);
   void draw(int width, int height, const RenderOptions& options, const FollowCamera& camera);
+  // Menu background only; does not rebuild terrain or restore the old robot showroom.
+  void drawMenuBackground(int width, int height, float time);
   glm::vec2 project(glm::vec3 point, float width, float height) const;
   const RenderStats& stats() const { return stats_; }
  private:
@@ -40,6 +43,7 @@ class Renderer {
   std::array<glm::vec4,maxLights> lightPosition_{}, lightColour_{};
   int lightCount_ = 0;
   craft::graphics::Shader shader_;
+  Skybox skybox_;
   SceneModels models_;
   std::vector<Instance> instances_;
   unsigned cubeVao_ = 0, cubeBuffer_ = 0, instanceBuffer_ = 0;

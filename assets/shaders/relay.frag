@@ -51,6 +51,7 @@ void main() {
   if(uNormalMapping) {
     vec3 detail=texture(uNormal,vUv).xyz*2.0-1.0;
     detail.xy*=mix(1.0,.18,vMaterial.x);
+    detail.xy *= 3.0;
     n=normalize(mat3(t,cross(n,t),n)*normalize(detail));
   }
   vec3 albedo=vColour*mix(texture(uAlbedo,vUv).rgb,vec3(.98),vMaterial.x*.8);

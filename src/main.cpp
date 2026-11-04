@@ -64,7 +64,7 @@ int main(int argc,char** argv) {
    if(screen==Screen::Play&&(focused||frames>0)) game.update(dt,input);
    camera.update(game,dt); options.menu=screen==Screen::Title||(screen==Screen::Settings&&!settingsPause);
    if(options.menu) {
-    glViewport(0,0,w,h); glClearColor(.90F,.91F,.92F,1); glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+    renderer.drawMenuBackground(w,h,float(now));
    } else { renderer.prepare(game,options,float(now));renderer.draw(w,h,options,camera); }
    if(screen==Screen::Settings) {
     int pressed=-1;for(int key:relay::KeyBindings::supportedKeys()) if(keys.pressed(key)){pressed=key;break;}

@@ -196,6 +196,7 @@ void Game::reset(int level) {
  world_.fill(19,2,20,23,4,27,2);
  world_.fill(19,1,19,23,4,20,2); world_.fill(19,1,27,23,4,28,2);
  if(level_==0) {
+  world_.fill(5,1,24,6,3,27,0);
   traps_.push_back({{{12,1,12},{17,1.7F,15}},0,0});
   switches_.push_back({{10,1,16},0,0});
   movers_.push_back({{25,1.75F,10},{25,1.75F,24},{25,1.75F,10},{.65F,.75F,.65F},6,0});

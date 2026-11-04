@@ -106,11 +106,12 @@ std::vector<Vertex> roundPrimitive(bool cylinder,int slices=24,int stacks=14) {
 }
 float heightAt(int x, int y) {
   x = (x+64)%64; y = (y+64)%64;
-  return (x<1 || y<1 ? -.055F : .0F) + .0015F*std::sin(float(x)*.8F)*std::sin(float(y)*.6F);
+  return (x<1 || y<1 ? -.055F : .0F) + .002F*std::sin(float(x)*.8F)*std::sin(float(y)*.6F);
 }
 }
 
-Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), craft::core::assetPath("shaders/relay.frag")) {
+Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), craft::core::assetPath("shaders/relay.frag")),
+    skybox_(craft::core::assetPath("textures/skybox/cross.jpg")) {
   glGenVertexArrays(1,&cubeVao_); glGenVertexArrays(1,&terrainVao_);
   glGenBuffers(1,&cubeBuffer_); glGenBuffers(1,&instanceBuffer_);
   glGenBuffers(1,&terrainBuffer_); glGenBuffers(1,&terrainInstance_);
@@ -193,7 +194,20 @@ void Renderer::prepare(const Game& game, const RenderOptions& options, float gal
   stats_.instances=int(instances_.size());
   stats_.submittedTriangles=options.gallery||options.menu?0:terrainVertices_/3;
   stats_.drawCalls=options.gallery||options.menu?0:1;
+  // The skybox submits one fullscreen triangle and one draw call.
+  ++stats_.submittedTriangles; ++stats_.drawCalls;
   for(int i=0;i<groups;++i) if(instanceCount_[i]) { stats_.submittedTriangles+=instanceCount_[i]*meshCount_[i%primitives]/3; ++stats_.drawCalls; }
+}
+void Renderer::drawMenuBackground(int width, int height, float time) {
+  if (width <= 0 || height <= 0) return;
+  glViewport(0, 0, width, height);
+  glClearColor(0, 0, 0, 1);
+  glDepthMask(GL_TRUE);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  const float yaw = time * .025F;
+  const auto projection = glm::perspective(glm::radians(65.F), float(width) / height, .1F, 100.F);
+  const auto view = glm::lookAt(glm::vec3(0), glm::vec3(std::sin(yaw), .15F, -std::cos(yaw)), glm::vec3(0,1,0));
+  skybox_.draw(projection * view);
 }
 void Renderer::draw(int width, int height, const RenderOptions& options, const FollowCamera& camera) {
   const float aspect=float(width)/float(height);
@@ -244,6 +258,7 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
   glViewport(0,0,width,height);
   if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.22F,.27F,.30F,1);
   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+  skybox_.draw(viewProjection_);
   glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDisable(GL_BLEND);
   shader_.use(); shader_.setMat4("uViewProjection",viewProjection_); shader_.setVec3("uEye",eye);
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);
