@@ -38,10 +38,9 @@ int menuSelection(){return selected;} int settingsSelection(){return setting;}
 MenuAction drawMenu(MenuMode mode,int& level,float,bool){
  const bool pause=mode==MenuMode::Pause;auto* d=ImGui::GetBackgroundDrawList();auto size=ImGui::GetIO().DisplaySize;float s=scale();
  if(mode!=lastMode){selected=0;lastMode=mode;}navigation(selected,4);
- if(!pause)d->AddRectFilled({0,0},size,background);
- else d->AddRectFilled({0,0},size,IM_COL32(30,35,40,155));
+ d->AddRectFilled({0,0},size,IM_COL32(12,16,24,pause?155:35));
  const float x=size.x*.5F-230*s,top=size.y*.5F-235*s;
- if(pause){d->AddRectFilled({x-36*s,top-45*s},{x+496*s,top+410*s},background,5*s);}
+ d->AddRectFilled({x-36*s,top-45*s},{x+496*s,top+440*s},IM_COL32(229,231,234,235),5*s);
  center(d,top,44*s,ink,pause?"Paused":"Core Explorer Lite");
  center(d,top+65*s,20*s,muted,pause?"Game paused":"Collect cores and reach the exit");
  const std::string levelLabel=std::string("Level: ")+(level==0?"Tutorial Yard":"Obstacle Yard")+"   < >";
@@ -61,8 +60,11 @@ MenuAction drawMenu(MenuMode mode,int& level,float,bool){
  return MenuAction::None;
 }
 bool drawSettings(KeyBindings& keys,float,int pressedKey,bool escape,bool){
- auto* d=ImGui::GetBackgroundDrawList();auto size=ImGui::GetIO().DisplaySize;float s=scale();d->AddRectFilled({0,0},size,background);
- float x=size.x*.5F-300*s,top=50*s;center(d,top,38*s,ink,"Controls");
+ auto* d=ImGui::GetBackgroundDrawList();auto size=ImGui::GetIO().DisplaySize;float s=scale();
+ d->AddRectFilled({0,0},size,IM_COL32(12,16,24,80));
+ float x=size.x*.5F-300*s,top=50*s;
+ d->AddRectFilled({x-30*s,top-20*s},{x+630*s,top+(108+(KeyBindings::count+1)*58+68)*s},IM_COL32(229,231,234,235),5*s);
+ center(d,top,38*s,ink,"Controls");
  center(d,top+53*s,18*s,muted,"Select an action to change its key");
  bool consumed=capture>=0;
  if(capture>=0){if(escape)capture=-1;else if(pressedKey>=0&&keys.assign(KeyAction(capture),pressedKey)){keys.save(settingsPath());capture=-1;}}
