@@ -261,10 +261,12 @@ void Game::moveAxis(int axis,float distance) {
 }
 void Game::applyDamage(glm::vec3 source,int,bool,DamageKind) {
  if(player_.hurtCooldown>0||state_!=RunState::Playing) return;
- --player_.health; player_.hurtCooldown=1; player_.hitStun=.12F; player_.motion.hitAge=0;
+ --player_.health; player_.hurtCooldown=1; player_.hitStun=.18F; player_.motion.hitAge=0;
  auto direction=glm::vec2(player_.position.x-source.x,player_.position.z-source.z);
  if(glm::length(direction)<.01F) direction={0,1}; else direction=glm::normalize(direction);
- player_.knockback=direction*3.F;
+ // A short recoil of roughly half a cell, resolved by the normal collision sweep.
+ player_.knockback=direction*4.8F;
+ player_.locomotion={0,0};
  player_.hitBlend=.85F; // Immediate recoil, then a short smooth recovery.
  player_.motion.hitKind=0;
  emitImpact({direction.x,0,direction.y});

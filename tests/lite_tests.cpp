@@ -33,6 +33,11 @@ int main(){try{
  check(g.state()==relay::RunState::Lost&&g.liveParticleCount()>0,"Fatal damage burst");
  const float lostTime=g.elapsed();advance(g,1);check(g.elapsed()==lostTime&&g.liveParticleCount()==0,"Failure freezes clock but settles particles");
  g.reset(0);check(g.elapsed()==0&&g.liveParticleCount()==0,"Restart resets timer and particles");
+ g.reset(0);advance(g,4.1F);g.warpPlayer({14,1,13});g.update(.01F,{});
+ const auto hitPosition=g.player().position;const auto push=glm::normalize(g.player().knockback);
+ advance(g,.3F);const auto recoil=glm::vec2(g.player().position.x-hitPosition.x,g.player().position.z-hitPosition.z);
+ check(glm::dot(recoil,push)>.45F&&glm::length(recoil)<.7F,"Hit recoils a short step away from damage");
+ check(!g.playerIntersectsScene(),"Recoil respects scene collision");
  g.reset(0);advance(g,125);check(!g.timedLevel()&&g.state()==relay::RunState::Playing,"Tutorial has unlimited time");
  g.reset(1);check(g.timeRemaining()==relay::Game::challengeTimeLimit,"Challenge countdown initial value");
  advance(g,1.25F);check(std::abs(g.timeRemaining()-118.75F)<.01F,"Challenge counts down");
