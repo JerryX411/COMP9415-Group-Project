@@ -40,6 +40,8 @@ class AppUi {
   [[nodiscard]] bool drawBenchmarkSection(
       const BenchmarkSnapshot& benchmark) const;
   int levelRequest_ = -1;
+  int hudRevision_=-1, hudCoreCount_=0;
+  float coreCollectedAt_=-10;
   float prewarmedScale_ = 0;
   // Training field manual: the page on screen (-1 closed), whether it has been shown, and when.
   int popupPage_ = -1;

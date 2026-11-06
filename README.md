@@ -8,7 +8,7 @@ Removed: arrival cinematic, sprint/boost/slide/wall actions, jetpack, portals, c
 
 Build: `cmake -S . -B build`, then `cmake --build build`. Run `build/CoreExplorerLite.exe` (Windows) or `build/CoreExplorerLite` (Linux). Tests: `ctest --test-dir build --output-on-failure`.
 
-Title, pause, settings, HUD and result screens use large bold text only over the scene: no panels, borders, button fills or fullscreen tint. Selected menu text is cyan; armour is shown as a number. A small glyph shadow preserves readability.
+Title, pause, settings, HUD and result screens use large bold text only over the scene: no panels, borders, button fills or fullscreen tint. Selected menu text is cyan; the gameplay HUD mirrors the advanced layout: five slanted armour cells at top left, filled/dim hexagonal core slots at bottom centre, and large countdown digits (or an infinity glyph in training) at top right, all without backing panels or outlines. A small glyph shadow preserves readability.
 
 UI uses Segoe UI Bold from Windows when available, or the bundled Rajdhani font under its included OFL licence. Robot and map geometry are generated in code.
 

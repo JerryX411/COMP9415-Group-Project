@@ -65,15 +65,56 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  };
  const ImU32 main=IM_COL32(242,247,252,255),secondary=IM_COL32(200,217,228,255);
  const float height=size.y/s;
- label(40,32,32,game.player().health<=1?danger:main,"ARMOUR  "+std::to_string(game.player().health)+" / 5");
- const std::string progress="CORES  "+std::to_string(game.collectedCount())+" / "+std::to_string(game.cores().size());
- label(size.x/s-340,32,30,main,game.levelName());
- label(size.x/s-390,78,28,game.gateUnlocked()?mint:main,progress+(game.gateUnlocked()?"  /  EXIT OPEN":""));
+ // Match the advanced HUD positions without panels or outlines.
+ const auto& player=game.player();
+ const float t=game.elapsed(),hitAge=player.motion.hitAge;
+ const float recoil=hitAge<.45F?std::exp(-10*hitAge)*std::sin(hitAge*65)*5*s:0;
+ const ImU32 armourTone=player.health<=1?danger:player.health<=2?amber:glowCyan;
+ const auto cell=[&](float x,float y,float w,float h,ImU32 colour){
+  const ImVec2 points[]{{x+7*s,y},{x+w,y},{x+w-7*s,y+h},{x,y+h}};
+  d->AddConvexPolyFilled(points,4,colour);
+ };
+ // A filled shield glyph, followed by five distinct armour cells.
+ const ImVec2 shield[]{{46*s,40*s},{65*s,40*s},{65*s,52*s},{55.5F*s,63*s},{46*s,52*s}};
+ d->AddConvexPolyFilled(shield,5,armourTone);
+ for(int i=0;i<5;++i) {
+  const float x=(80+i*42)*s+recoil,y=41*s;
+  const bool full=i<player.health;
+  cell(x,y,35*s,24*s,full?armourTone:IM_COL32(155,181,198,55));
+  if(full)cell(x+2*s,y+2*s,31*s,3*s,withAlpha(ice,.7F));
+  if(i==player.health&&hitAge<.5F) {
+   const float fade=1-hitAge/.5F;
+   cell(x,y-hitAge*18*s,35*s,24*s,withAlpha(danger,fade));
+   for(int j=0;j<5;++j){const float angle=-2.5F+j*.8F;const float travel=hitAge*(50+j*12)*s;
+    cell(x+16*s+std::cos(angle)*travel,y+10*s+std::sin(angle)*travel+hitAge*hitAge*100*s,7*s,4*s,withAlpha(danger,fade));}
+  }
+ }
+ if(hudRevision_!=game.revision()){hudRevision_=game.revision();hudCoreCount_=game.collectedCount();coreCollectedAt_=-10;}
+ if(game.collectedCount()>hudCoreCount_)coreCollectedAt_=t;
+ hudCoreCount_=game.collectedCount();
+ const float age=t-coreCollectedAt_;
+ const int coreCount=int(game.cores().size());
+ for(int i=0;i<coreCount;++i){
+  const bool collected=i<hudCoreCount_;
+  const float pop=collected&&i==hudCoreCount_-1&&age<.55F?std::sin(std::min(1.F,age/.55F)*3.14159F)*.35F:0;
+  const ImVec2 c(size.x*.5F+(i-(coreCount-1)*.5F)*46*s,size.y-61*s);
+  ImVec2 hex[6];for(int k=0;k<6;++k){const float angle=k*1.0471976F+.5235988F;hex[k]={c.x+std::cos(angle)*17*s*(1+pop),c.y+std::sin(angle)*17*s*(1+pop)};}
+  d->AddConvexPolyFilled(hex,6,collected?mint:IM_COL32(155,181,198,75));
+  if(collected)d->AddCircleFilled({c.x-4*s,c.y-5*s},3*s,withAlpha(ice,.8F),8);
+ }
  const int seconds=int(std::ceil(game.timeRemaining()));
  char clock[48];
- if(game.timedLevel())std::snprintf(clock,sizeof(clock),"TIME  %02d:%02d",seconds/60,seconds%60);
- else std::snprintf(clock,sizeof(clock),"TIME  UNLIMITED");
- centered(32,36,game.timedLevel()&&game.timeRemaining()<=20?danger:main,clock);
+ if(game.timedLevel())std::snprintf(clock,sizeof(clock),"%d:%02d",seconds/60,seconds%60);
+ else std::snprintf(clock,sizeof(clock),"UNLIMITED");
+ const ImU32 clockColour=!game.timedLevel()?glowCyan:seconds<=10?danger:seconds<=30?amber:ice;
+ if(game.timedLevel()) {
+  const float font=82*s,width=drawTracked(nullptr,font,{},clockColour,clock,0);
+  drawTracked(d,font,{size.x-48*s-width,28*s},clockColour,clock,0);
+ } else {
+  ImVec2 infinity[64];const ImVec2 c(size.x-125*s,69*s);
+  for(int i=0;i<64;++i){const float angle=i*6.2831853F/64,denom=1+std::sin(angle)*std::sin(angle);infinity[i]={c.x+63*s*std::cos(angle)/denom,c.y+63*s*std::sin(angle)*std::cos(angle)/denom};}
+  d->AddPolyline(infinity,64,clockColour,ImDrawFlags_Closed,7*s);
+ }
  const auto key=[](KeyAction a){return KeyBindings::keyName(keyBindings()[a]);};
  if(game.state()==RunState::Playing) {
   label(40,182,26,secondary,game.tutorialHint());
@@ -82,7 +123,7 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
    centered(height-155,34,mint,key(KeyAction::Interact)+(game.availableInteraction()==Interaction::Core?"  COLLECT CORE":"  RETRACT SPIKES"));
  }
  const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE";
- centered(height-60,26,secondary,controls);
+ centered(height-28,20,secondary,controls);
  if(game.state()!=RunState::Playing) {
   centered(height*.4F,52,game.state()==RunState::Won?mint:danger,game.state()==RunState::Won?"LEVEL COMPLETE":game.timedOut()?"TIME UP":"ROBOT DISABLED");
   centered(height*.4F+78,32,main,clock);
