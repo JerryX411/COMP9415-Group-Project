@@ -228,6 +228,7 @@ class Game {
  const std::vector<RelaySwitch>& switches() const{return switches_;}
  const std::vector<MovingHazard>& movers() const{return movers_;}
  RunState state() const{return state_;} int level() const{return level_;} int revision() const{return revision_;}
+ const std::array<Particle,64>& particles() const{return particles_;}
  float elapsed() const{return elapsed_;} Bounds room() const{return room_;} glm::vec3 spawnPoint() const{return spawn_;}
  const std::string& message() const{return message_;} float messageTime() const{return messageTime_;}
  void warpPlayer(glm::vec3 feet);
@@ -254,6 +255,8 @@ class Game {
  std::vector<FloorTrap> traps_; std::vector<RelaySwitch> switches_; std::vector<MovingHazard> movers_;
  std::vector<Core> cores_; std::vector<Checkpoint> checkpoints_; std::vector<PortalLink> portals_;
  std::vector<Pickup> pickups_; std::vector<SpeedPad> pads_; std::vector<BlastDoor> doors_;
- std::array<Particle,1> particles_{};
+ std::array<Particle,64> particles_{};
+ void emitImpact(glm::vec3 direction);
+ void updateParticles(float dt);
 };
 } // namespace relay

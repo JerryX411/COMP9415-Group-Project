@@ -4,7 +4,7 @@ Current Member-A version: the reduced edition of Core Explorer. The advanced ver
 
 Includes two simple voxel yards, robot movement/animation, WASD, mouse camera, Space jump, C toggle crouch, E switch interaction, retractable spikes, moving blocks, armour, restart/pause, and a plain UI over a cubemap background. E retracts the linked spikes for five seconds. R restarts; Esc pauses. Select LEVEL in the title menu to change maps.
 
-Removed: arrival cinematic, sprint/boost/slide/wall actions, jetpack, portals, checkpoints, advanced pickup effects, timers, training, workshop, particle effects, and the full audio pack. The reduced build is intentionally silent.
+Removed: arrival cinematic, sprint/boost/slide/wall actions, jetpack, portals, checkpoints, advanced pickup effects, training, workshop, advanced particle effects, and the full audio pack. The reduced build is intentionally silent.
 
 Build: `cmake -S . -B build`, then `cmake --build build`. Run `build/CoreExplorerLite.exe` (Windows) or `build/CoreExplorerLite` (Linux). Tests: `ctest --test-dir build --output-on-failure`.
 
@@ -23,3 +23,9 @@ Each map has three blue cores. Approach and press the interact key (E by default
 ## Member-B integration
 
 Integrated JerryX411's skybox contribution from Member-B commit db8a1acf1a2562a64f99932586163ae0706976a1 using an author-preserving cherry-pick. Includes cubemap rendering, menu panels, surface detail adjustments and the tutorial passage change. The preceding a08ef51 commit only packages build tools/dependencies and generated output; it is intentionally excluded from the source checkout. See docs/SKYBOX.md for implementation and assets/textures/skybox/README.md for the supplied image's attribution status.
+
+## Lite timer and impact feedback
+
+The HUD shows elapsed level time as minutes:seconds.tenths. Timing starts on entering a level, pauses with the pause/settings menu or loss of focus, freezes on completion/failure, and resets on restart or level change. Result panels show the final time; there is no countdown or time-limit failure.
+
+Damage briefly recoils the torso/head/arms in the hit direction and emits 18 small sparks/metal fragments. The fixed 64-particle pool uses gravity, drag, voxel collision/bounce and lifetime cleanup, including after failure; pausing freezes the simulation. No continuous emitter is active. The supplied skybox retains its original image, with a gentle blue lift, horizon haze, mip filtering and slower menu rotation.

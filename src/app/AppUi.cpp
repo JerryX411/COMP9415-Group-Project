@@ -64,6 +64,10 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  drawTracked(d,26*s,{size.x-320*s,48*s},graphite,game.levelName(),1*s,true);
  const std::string progress="CORES  "+std::to_string(game.collectedCount())+" / "+std::to_string(game.cores().size())+(game.gateUnlocked()?"   EXIT OPEN":"");
  drawTracked(d,20*s,{size.x-320*s,90*s},graphite,progress.c_str(),0);
+ const int tenths=int(game.elapsed()*10);
+ char clock[48];std::snprintf(clock,sizeof(clock),"TIME  %02d:%02d.%d",tenths/600,(tenths/10)%60,tenths%10);
+ drawAcrylicRect(d,{size.x*.5F-145*s,28*s},{size.x*.5F+145*s,100*s},3*s,1);
+ drawTracked(d,28*s,{size.x*.5F-122*s,50*s},graphite,clock,0);
  drawAcrylicRect(d,{28*s,208*s},{850*s,258*s},3*s,1);
  drawTracked(d,19*s,{44*s,222*s},graphite,game.tutorialHint(),0);
  drawAcrylicRect(d,{28*s,size.y-88*s},{size.x-28*s,size.y-28*s},10*s,.84F);
@@ -79,15 +83,17 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
   drawTracked(d,19*s,{44*s,160*s},graphite,game.message().c_str(),.3F*s);
  }
  if(game.state()==RunState::Won) {
-  drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+160*s},3*s,1);
+  drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+195*s},3*s,1);
   drawTracked(d,38*s,{size.x*.5F-210*s,size.y*.4F+24*s},graphite,"LEVEL COMPLETE",0);
-  drawTracked(d,23*s,{size.x*.5F-230*s,size.y*.4F+90*s},graphite,(key(KeyAction::Restart)+" RESTART   |   ENTER NEXT LEVEL").c_str(),0);
+  drawTracked(d,23*s,{size.x*.5F-230*s,size.y*.4F+140*s},graphite,(key(KeyAction::Restart)+" RESTART   |   ENTER NEXT LEVEL").c_str(),0);
   if(ImGui::IsKeyPressed(ImGuiKey_Enter,false))levelRequest_=1-game.level();
  }
+ if(game.state()==RunState::Won) drawTracked(d,26*s,{size.x*.5F-125*s,size.y*.4F+87*s},graphite,clock,0);
  if(game.state()==RunState::Lost) {
-  drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+160*s},14*s,.97F);
+  drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+195*s},14*s,.97F);
+  drawTracked(d,26*s,{size.x*.5F-125*s,size.y*.4F+87*s},graphite,clock,0);
   drawTracked(d,44*s,{size.x*.5F-245*s,size.y*.4F+24*s},danger,"ROBOT DISABLED",2*s,true);
-  drawTracked(d,25*s,{size.x*.5F-190*s,size.y*.4F+100*s},graphite,("PRESS "+key(KeyAction::Restart)+" TO RESTART").c_str(),1*s,true);
+  drawTracked(d,25*s,{size.x*.5F-190*s,size.y*.4F+140*s},graphite,("PRESS "+key(KeyAction::Restart)+" TO RESTART").c_str(),1*s,true);
  }
  return false;
 }

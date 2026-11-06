@@ -227,7 +227,7 @@ const std::vector<Bounds>& Game::fixtures() const {
 const char* Game::nameOf(int level) { return level==0?"TUTORIAL YARD":"OBSTACLE YARD"; }
 bool Game::gateUnlocked() const { return !cores_.empty() && collectedCount()==int(cores_.size()); }
 int Game::collectedCount() const { return int(std::count_if(cores_.begin(),cores_.end(),[](const Core& c){return c.collected;})); }
-int Game::liveParticleCount() const { return 0; }
+int Game::liveParticleCount() const { return int(std::count_if(particles_.begin(),particles_.end(),[](const Particle& p){return p.remaining>0;})); }
 float Game::boostMeter() const { return 0; }
 int Game::nearestCore() const {
  float closest=1.8F; int result=-1; const auto hand=player_.position+glm::vec3(0,.8F,0);
@@ -265,11 +265,45 @@ void Game::applyDamage(glm::vec3 source,int,bool,DamageKind) {
  auto direction=glm::vec2(player_.position.x-source.x,player_.position.z-source.z);
  if(glm::length(direction)<.01F) direction={0,1}; else direction=glm::normalize(direction);
  player_.knockback=direction*3.F;
+ player_.hitBlend=.85F; // Immediate recoil, then a short smooth recovery.
+ player_.motion.hitKind=0;
+ emitImpact({direction.x,0,direction.y});
  player_.motion.hitSide=direction.x*std::cos(player_.yaw)-direction.y*std::sin(player_.yaw);
  player_.motion.hitForward=-direction.x*std::sin(player_.yaw)-direction.y*std::cos(player_.yaw);
  message_="Impact! Avoid the spikes and moving blocks."; messageTime_=2;
  player_.interaction=Interaction::None; player_.interactionTime=0;
  if(player_.health<=0) { state_=RunState::Lost; player_.deathTime=.01F; player_.locomotion={0,0}; message_="Robot disabled. Press R to restart."; }
+}
+void Game::emitImpact(glm::vec3 direction) {
+ int emitted=0;
+ for(auto& p:particles_) {
+  if(p.remaining>0) continue;
+  const int i=emitted++;
+  const float angle=float(i)*2.399963F+elapsed_*1.7F;
+  p=Particle{};
+  p.kind=i%3==0?ParticleKind::Debris:ParticleKind::Spark;
+  p.position=player_.position+glm::vec3(0,.85F,0)-direction*.32F;
+  p.velocity=direction*1.2F+glm::vec3(std::cos(angle)*(1.4F+.17F*i),1.8F+.23F*(i%5),std::sin(angle)*(1.4F+.17F*i));
+  p.lifetime=p.remaining=.35F+.065F*(i%7);
+  p.size=p.kind==ParticleKind::Debris?.055F:.025F;
+  p.colour=p.kind==ParticleKind::Debris?glm::vec3(.48F,.55F,.6F):glm::vec3(1,.65F,.24F);
+  p.gravity=10; p.drag=1.3F; p.seed=angle;
+  if(emitted==18) break;
+ }
+}
+void Game::updateParticles(float dt) {
+ for(auto& p:particles_) if(p.remaining>0) {
+  p.remaining=std::max(0.F,p.remaining-dt);
+  if(p.remaining==0)continue;
+  p.velocity*=std::exp(-p.drag*dt);p.velocity.y-=p.gravity*dt;
+  for(int axis=0;axis<3;++axis) {
+   const float before=p.position[axis];p.position[axis]+=p.velocity[axis]*dt;
+   const glm::vec3 radius(p.size*.5F);
+   if(world_.collides({p.position-radius,p.position+radius})) {
+    p.position[axis]=before;p.velocity[axis]*=-.3F;p.bounced=true;
+   }
+  }
+ }
 }
 void Game::updateInteraction(float dt,bool pressed) {
  if(player_.interactionTime>0) {
@@ -298,7 +332,13 @@ void Game::update(float seconds,const Input& input) {
  for(int i=0;i<n;++i) { Input sub=input; if(i) sub.jumpPressed=sub.crouchPressed=sub.interactPressed=false; step(std::min(seconds,1.F)/n,sub); }
 }
 void Game::step(float dt,const Input& input) {
- if(state_!=RunState::Playing) return;
+ updateParticles(dt);
+ if(state_!=RunState::Playing) {
+  // Presentation settles after the result while the run clock stays frozen.
+  player_.hitStun=std::max(0.F,player_.hitStun-dt);
+  updateAnimation(dt,player_.position,0);
+  return;
+ }
  elapsed_+=dt; messageTime_=std::max(0.F,messageTime_-dt);
  player_.hurtCooldown=std::max(0.F,player_.hurtCooldown-dt); player_.hitStun=std::max(0.F,player_.hitStun-dt);
  player_.landingPulse=std::max(0.F,player_.landingPulse-5*dt);
@@ -344,7 +384,7 @@ void Game::updateAnimation(float dt,glm::vec3 previous,float turn) {
  player_.airBlend=blend(player_.airBlend,player_.grounded?0.F:1.F,20);
  player_.crouchBlend=blend(player_.crouchBlend,player_.crouching?1.F:0.F,14);
  player_.landingBlend=blend(player_.landingBlend,player_.landingPulse,35);
- player_.hitBlend=blend(player_.hitBlend,player_.hitStun>0?1.F:0.F,20);
+ player_.hitBlend=blend(player_.hitBlend,player_.motion.hitAge<.08F?1.F:0.F,12);
  player_.idlePhase+=dt;
  auto& a=player_.motion;
  for(float* age:{&a.startAge,&a.stopAge,&a.pivotAge,&a.launchAge,&a.landAge,&a.stepAge,&a.hitAge}) *age=std::min(10.F,*age+dt);

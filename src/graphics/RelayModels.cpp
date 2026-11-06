@@ -267,6 +267,14 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
  auto root=glm::translate(glm::mat4(1),p.position+glm::vec3(0,bodyHop(p),0));
  root=glm::scale(glm::rotate(root,p.yaw,{0,1,0}),bodyScale(p));
  robot_.append(root,out);
+ for(const auto& particle:game.particles()) if(particle.remaining>0) {
+  const float fade=std::min(1.F,particle.remaining/.18F);
+  if(particle.kind==ParticleKind::Spark) {
+   out.push_back({between(particle.position,particle.position-particle.velocity*.035F,particle.size*fade),glm::vec4(particle.colour,fade),{0,1.6F,0,1},Primitive::Flat,Blend::Additive});
+  } else {
+   appendBox(out,particle.position,glm::vec3(particle.size*fade),particle.colour,0,.5F,particle.seed+(particle.lifetime-particle.remaining)*8);
+  }
+ }
  for(const auto& c:game.cores())if(!c.collected) {
   appendBox(out,c.position-glm::vec3(0,.65F,0),{.65F,.1F,.65F},{.28F,.32F,.36F});
   appendBox(out,c.position,{.42F,.55F,.42F},{.25F,.65F,.85F},.12F,0);

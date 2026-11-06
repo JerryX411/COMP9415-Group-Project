@@ -204,7 +204,7 @@ void Renderer::drawMenuBackground(int width, int height, float time) {
   glClearColor(0, 0, 0, 1);
   glDepthMask(GL_TRUE);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  const float yaw = time * .025F;
+  const float yaw = time * .008F;
   const auto projection = glm::perspective(glm::radians(65.F), float(width) / height, .1F, 100.F);
   const auto view = glm::lookAt(glm::vec3(0), glm::vec3(std::sin(yaw), .15F, -std::cos(yaw)), glm::vec3(0,1,0));
   skybox_.draw(projection * view);
