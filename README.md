@@ -34,4 +34,4 @@ Core collection emits one short burst of 20 cyan-white sparks; impact sparks are
 
 ## Jump pads
 
-Each yard has one flush cyan chevron pad (tutorial: 10,1,19; obstacle: 26,1,12). Step or land on it to launch automatically about 4.3 cells above the floor, versus roughly 1.8 for a held normal jump. No Space press/hold is needed; steer in the air with WASD. A brief cyan spark burst marks launch. Landing on it bounces again, while passing above it does not trigger it. Normal ceiling and wall collisions still apply.
+Each yard has one flush cyan chevron pad (tutorial: 10,1,19; obstacle: 26,1,12). Step or land on it to launch automatically about 4.3 cells above the floor, versus roughly 1.8 for a held normal jump. No Space press/hold is needed; steer in the air with WASD. A cyan-white upward plume and a 0.4-second trail beneath the ascending robot mark launch; particles expire within 0.72 seconds. Landing on it bounces again, while passing above it does not trigger it. Normal ceiling and wall collisions still apply.

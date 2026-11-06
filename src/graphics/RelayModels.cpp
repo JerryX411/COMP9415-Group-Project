@@ -269,8 +269,8 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
  robot_.append(root,out);
  for(const auto& particle:game.particles()) if(particle.remaining>0) {
   const float fade=std::min(1.F,particle.remaining/.18F);
-  if(particle.kind==ParticleKind::Spark) {
-   out.push_back({between(particle.position,particle.position-particle.velocity*.065F,particle.size*fade),glm::vec4(particle.colour,fade),{0,1.6F,0,1},Primitive::Flat,Blend::Additive});
+  if(particle.kind==ParticleKind::Spark||particle.kind==ParticleKind::Ray) {
+   out.push_back({between(particle.position,particle.position-(particle.kind==ParticleKind::Ray?particle.extent:particle.velocity*.065F),particle.size*fade),glm::vec4(particle.colour,fade),{0,1.6F,0,1},Primitive::Flat,Blend::Additive});
    appendGlow(out,particle.position,glm::vec3(particle.size*3),particle.colour,.22F*fade,.5F);
   } else {
    appendBox(out,particle.position,glm::vec3(particle.size*fade),particle.colour,0,.5F,particle.seed+(particle.lifetime-particle.remaining)*8);

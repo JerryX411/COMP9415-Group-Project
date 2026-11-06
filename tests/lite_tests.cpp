@@ -49,9 +49,11 @@ int main(){try{
   g.reset(level);check(g.jumpPads().size()==1,"Each map has a jump pad");
   const auto pad=g.jumpPads()[0].position;g.warpPlayer(pad);g.update(.01F,{});
   check(g.player().velocity.y>14&&!g.player().grounded,"Standing on pad launches automatically");
+  check(g.liveParticleCount()==20&&g.particles()[0].kind==relay::ParticleKind::Ray&&g.particles()[0].velocity.y>5,"Pad emits upward launch streaks");
   float peak=0;for(int i=0;i<90;++i){g.update(1.F/120,{});peak=std::max(peak,g.player().position.y-pad.y);}
   check(peak>4&&peak<4.5F,"Pad jumps higher without holding Space");
   check(g.jumpPads()[0].pulse==0,"Pad feedback decays in flight");
+  check(g.liveParticleCount()==0,"Launch plume and trail expire without filling the pool");
   bool bounced=false;for(int i=0;i<120;++i){g.update(1.F/120,{});if(g.player().velocity.y>14){bounced=true;break;}}
   check(bounced,"Landing on pad triggers another bounce");
   g.reset(level);g.warpPlayer(g.jumpPads()[0].position+glm::vec3(0,2,0));g.update(.05F,{});

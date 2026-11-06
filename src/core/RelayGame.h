@@ -266,6 +266,8 @@ class Game {
  std::array<Particle,64> particles_{};
  void emitImpact(glm::vec3 direction);
  void emitCoreSparks(glm::vec3 position);
+ void emitLiftParticles(glm::vec3 position,bool trail);
+ float liftTrail_=0,liftTick_=0;
  void updateParticles(float dt);
 };
 } // namespace relay

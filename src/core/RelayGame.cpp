@@ -185,6 +185,7 @@ bool Game::separateFromMover(std::size_t index) {
 Game::Game() { reset(0); }
 void Game::reset(int level) {
  level_=std::clamp(level,0,1); ++revision_; state_=RunState::Playing;
+ liftTrail_=liftTick_=0;
  elapsed_=0; remaining_=level_==0?0:challengeTimeLimit; gateOpen_=0; crouchToggle_=false; hitStop_=0;
  player_=Player{}; spawn_={8,1,25}; player_.position=spawn_; player_.motion.spawnAge=10;
  room_={{4,1,4},{36,4,36}}; wallHeight_=3;
@@ -307,6 +308,21 @@ void Game::emitCoreSparks(glm::vec3 position) {
   if(emitted==20)break;
  }
 }
+void Game::emitLiftParticles(glm::vec3 position,bool trail) {
+ int emitted=0;
+ for(auto& p:particles_) {
+  if(p.remaining>0)continue;
+  const int i=emitted++;const float angle=i*2.399963F+elapsed_*9;
+  const float radius=trail?.32F:.6F;
+  p=Particle{};p.kind=ParticleKind::Ray;
+  p.position=position+glm::vec3(std::cos(angle)*radius,.12F,std::sin(angle)*radius);
+  p.velocity={std::cos(angle)*.4F,trail?1.2F:6.F+float(i%5)*.7F,std::sin(angle)*.4F};
+  p.colour=i%3?glm::vec3(.15F,.8F,1):glm::vec3(.8F,1,1);
+  p.size=trail?.035F:.045F;p.lifetime=p.remaining=trail?.32F:.55F+.035F*(i%5);
+  p.extent={0,trail?.28F:.48F,0};p.drag=.8F;p.gravity=trail?1.F:3.F;
+  if(emitted==(trail?3:20))break;
+ }
+}
 void Game::updateParticles(float dt) {
  for(auto& p:particles_) if(p.remaining>0) {
   p.remaining=std::max(0.F,p.remaining-dt);
@@ -405,9 +421,14 @@ void Game::step(float dt,const Input& input) {
   player_.velocity.y=jumpPadSpeed;player_.grounded=false;player_.jumpActive=false;
   player_.jumpBuffer=player_.coyoteTime=0;player_.landingPulse=0;player_.motion.launchAge=0;
   pad.cooldown=.4F;pad.pulse=1;
-  emitCoreSparks(pad.position+glm::vec3(0,.1F,0));
+  emitLiftParticles(pad.position,false);liftTrail_=.4F;liftTick_=0;
   message_="Jump pad! Steer in the air with movement keys.";messageTime_=2;
   break;
+ }
+ if(liftTrail_>0) {
+  liftTrail_=std::max(0.F,liftTrail_-dt);
+  if(player_.velocity.y<=0||player_.grounded)liftTrail_=0;
+  else {liftTick_+=dt;while(liftTick_>=.04F){liftTick_-=.04F;emitLiftParticles(player_.position,true);}}
  }
  for(std::size_t i=0;i<traps_.size();++i) if(trapPhase(i)==TrapPhase::Active&&traps_[i].touchesFeet(player_.position,footRadius)) applyDamage((traps_[i].area.min+traps_[i].area.max)*.5F,int(i));
  if(player_.position.y<-5) { state_=RunState::Lost; player_.health=0; }
