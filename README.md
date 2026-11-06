@@ -1,5 +1,10 @@
 # Core Explorer Lite
 
+## Download and play (Windows x64)
+
+Download **Core-Explorer-Lite-Windows-x64.zip** from [GitHub Releases](https://github.com/JerryX411/COMP9415-Group-Project/releases/tag/lite-2026-11-07). Extract the whole ZIP, then double-click **Play.cmd**. No compiler, CMake, Python or build step is required. Keep the assets folder beside the executable. Requires 64-bit Windows and an OpenGL 3.3-capable graphics driver. GitHub's Code > Download ZIP is source code, not this ready-to-play package.
+
+
 Current Member-A version: the reduced edition of Core Explorer. The advanced version is preserved in Git history (48f981d) and the separate Core-Explorer repository.
 
 Includes two simple voxel yards, robot movement/animation, WASD, mouse camera, Space jump, C toggle crouch, E switch interaction, retractable spikes, moving blocks, armour, restart/pause, and a plain UI over a cubemap background. E retracts the linked spikes for five seconds. R restarts; Esc pauses. Select LEVEL in the title menu to change maps.
