@@ -2,13 +2,13 @@
 
 Current Member-A version: the reduced edition of Core Explorer. The advanced version is preserved in Git history (48f981d) and the separate Core-Explorer repository.
 
-Includes two simple voxel yards, robot movement/animation, WASD, mouse camera, Space jump, C toggle crouch, E switch interaction, retractable spikes, moving blocks, armour, restart/pause, and a plain, static UI. E retracts the linked spikes for five seconds. R restarts; Esc pauses. Select LEVEL in the title menu to change maps.
+Includes two simple voxel yards, robot movement/animation, WASD, mouse camera, Space jump, C toggle crouch, E switch interaction, retractable spikes, moving blocks, armour, restart/pause, and a plain UI over a cubemap background. E retracts the linked spikes for five seconds. R restarts; Esc pauses. Select LEVEL in the title menu to change maps.
 
-Removed: arrival cinematic, sprint/boost/slide/wall actions, jetpack, portals, checkpoints, pickups, timers, training, workshop, particle effects, and the full audio pack. The reduced build is intentionally silent.
+Removed: arrival cinematic, sprint/boost/slide/wall actions, jetpack, portals, checkpoints, advanced pickup effects, timers, training, workshop, particle effects, and the full audio pack. The reduced build is intentionally silent.
 
 Build: `cmake -S . -B build`, then `cmake --build build`. Run `build/CoreExplorerLite.exe` (Windows) or `build/CoreExplorerLite` (Linux). Tests: `ctest --test-dir build --output-on-failure`.
 
-Title and settings use a static grey background and ordinary buttons, without the robot showroom, animation, glow or blur. HUD panels are flat.
+Title and settings use ordinary light panels over a slowly rotating skybox, without the robot showroom, glow or blur. HUD panels are flat.
 
 UI uses Segoe UI from Windows when available, or the bundled Rajdhani font under its included OFL licence. Robot and map geometry are generated in code.
 
@@ -19,3 +19,7 @@ The original assignment requirements are retained in [docs/ASSIGNMENT.md](docs/A
 ## Core collection tutorial
 
 Each map has three blue cores. Approach and press the interact key (E by default); collecting all three opens the exit at the far-right end of the yard. Walk through the door to complete the level, then Enter selects the next map or R restarts. Progress and context hints appear in the plain HUD. Pickup uses a short reach animation and disappears; the exit indicator turns green and the two panels slide apart. No explosive particles, cinematic, or pickup camera shake is added. Reset clears collected cores and closes the gate.
+
+## Member-B integration
+
+Integrated JerryX411's skybox contribution from Member-B commit db8a1acf1a2562a64f99932586163ae0706976a1 using an author-preserving cherry-pick. Includes cubemap rendering, menu panels, surface detail adjustments and the tutorial passage change. The preceding a08ef51 commit only packages build tools/dependencies and generated output; it is intentionally excluded from the source checkout. See docs/SKYBOX.md for implementation and assets/textures/skybox/README.md for the supplied image's attribution status.
