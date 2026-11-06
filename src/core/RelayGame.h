@@ -229,6 +229,10 @@ class Game {
  const std::vector<MovingHazard>& movers() const{return movers_;}
  RunState state() const{return state_;} int level() const{return level_;} int revision() const{return revision_;}
  const std::array<Particle,64>& particles() const{return particles_;}
+ static constexpr float challengeTimeLimit=120.F;
+ bool timedLevel() const{return level_!=0;}
+ float timeRemaining() const{return remaining_;}
+ bool timedOut() const{return timedLevel()&&remaining_<=0&&state_==RunState::Lost;}
  float elapsed() const{return elapsed_;} Bounds room() const{return room_;} glm::vec3 spawnPoint() const{return spawn_;}
  const std::string& message() const{return message_;} float messageTime() const{return messageTime_;}
  void warpPlayer(glm::vec3 feet);

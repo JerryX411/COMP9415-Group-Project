@@ -185,7 +185,7 @@ bool Game::separateFromMover(std::size_t index) {
 Game::Game() { reset(0); }
 void Game::reset(int level) {
  level_=std::clamp(level,0,1); ++revision_; state_=RunState::Playing;
- elapsed_=0; remaining_=0; gateOpen_=0; crouchToggle_=false; hitStop_=0;
+ elapsed_=0; remaining_=level_==0?0:challengeTimeLimit; gateOpen_=0; crouchToggle_=false; hitStop_=0;
  player_=Player{}; spawn_={8,1,25}; player_.position=spawn_; player_.motion.spawnAge=10;
  room_={{4,1,4},{36,4,36}}; wallHeight_=3;
  cores_.clear(); interactionIndex_=-1; interactionCommitted_=false;
@@ -339,7 +339,18 @@ void Game::step(float dt,const Input& input) {
   updateAnimation(dt,player_.position,0);
   return;
  }
- elapsed_+=dt; messageTime_=std::max(0.F,messageTime_-dt);
+ if(timedLevel()) {
+  dt=std::min(dt,remaining_);
+  elapsed_+=dt;
+  remaining_=std::max(0.F,challengeTimeLimit-elapsed_);
+  if(remaining_<=0) {
+   state_=RunState::Lost;player_.velocity={0,0,0};player_.locomotion={0,0};player_.moveBlend=0;
+   player_.interaction=Interaction::None;player_.interactionTime=0;
+   message_="Time up. Press R to retry.";messageTime_=3;
+   return;
+  }
+ } else elapsed_+=dt;
+ messageTime_=std::max(0.F,messageTime_-dt);
  player_.hurtCooldown=std::max(0.F,player_.hurtCooldown-dt); player_.hitStun=std::max(0.F,player_.hitStun-dt);
  player_.landingPulse=std::max(0.F,player_.landingPulse-5*dt);
  for(auto& t:traps_) t.disabledFor=std::max(0.F,t.disabledFor-dt);

@@ -64,10 +64,12 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  drawTracked(d,26*s,{size.x-320*s,48*s},graphite,game.levelName(),1*s,true);
  const std::string progress="CORES  "+std::to_string(game.collectedCount())+" / "+std::to_string(game.cores().size())+(game.gateUnlocked()?"   EXIT OPEN":"");
  drawTracked(d,20*s,{size.x-320*s,90*s},graphite,progress.c_str(),0);
- const int tenths=int(game.elapsed()*10);
- char clock[48];std::snprintf(clock,sizeof(clock),"TIME  %02d:%02d.%d",tenths/600,(tenths/10)%60,tenths%10);
+ const int seconds=int(std::ceil(game.timeRemaining()));
+ char clock[48];
+ if(game.timedLevel())std::snprintf(clock,sizeof(clock),"TIME  %02d:%02d",seconds/60,seconds%60);
+ else std::snprintf(clock,sizeof(clock),"TIME  UNLIMITED");
  drawAcrylicRect(d,{size.x*.5F-145*s,28*s},{size.x*.5F+145*s,100*s},3*s,1);
- drawTracked(d,28*s,{size.x*.5F-122*s,50*s},graphite,clock,0);
+ drawTracked(d,28*s,{size.x*.5F-122*s,50*s},game.timedLevel()&&game.timeRemaining()<=20?danger:graphite,clock,0);
  drawAcrylicRect(d,{28*s,208*s},{850*s,258*s},3*s,1);
  drawTracked(d,19*s,{44*s,222*s},graphite,game.tutorialHint(),0);
  drawAcrylicRect(d,{28*s,size.y-88*s},{size.x-28*s,size.y-28*s},10*s,.84F);
@@ -92,7 +94,7 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  if(game.state()==RunState::Lost) {
   drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+195*s},14*s,.97F);
   drawTracked(d,26*s,{size.x*.5F-125*s,size.y*.4F+87*s},graphite,clock,0);
-  drawTracked(d,44*s,{size.x*.5F-245*s,size.y*.4F+24*s},danger,"ROBOT DISABLED",2*s,true);
+  drawTracked(d,44*s,{size.x*.5F-245*s,size.y*.4F+24*s},danger,game.timedOut()?"TIME UP":"ROBOT DISABLED",2*s,true);
   drawTracked(d,25*s,{size.x*.5F-190*s,size.y*.4F+140*s},graphite,("PRESS "+key(KeyAction::Restart)+" TO RESTART").c_str(),1*s,true);
  }
  return false;

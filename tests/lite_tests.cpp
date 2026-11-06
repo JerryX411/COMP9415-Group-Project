@@ -33,6 +33,13 @@ int main(){try{
  check(g.state()==relay::RunState::Lost&&g.liveParticleCount()>0,"Fatal damage burst");
  const float lostTime=g.elapsed();advance(g,1);check(g.elapsed()==lostTime&&g.liveParticleCount()==0,"Failure freezes clock but settles particles");
  g.reset(0);check(g.elapsed()==0&&g.liveParticleCount()==0,"Restart resets timer and particles");
+ g.reset(0);advance(g,125);check(!g.timedLevel()&&g.state()==relay::RunState::Playing,"Tutorial has unlimited time");
+ g.reset(1);check(g.timeRemaining()==relay::Game::challengeTimeLimit,"Challenge countdown initial value");
+ advance(g,1.25F);check(std::abs(g.timeRemaining()-118.75F)<.01F,"Challenge counts down");
+ const float remaining=g.timeRemaining();g.update(0,{});check(g.timeRemaining()==remaining,"Stopped simulation keeps countdown");
+ advance(g,120);check(g.timedOut()&&g.timeRemaining()==0&&g.player().health==5,"Timeout fails without damaging robot");
+ const float timeoutElapsed=g.elapsed();advance(g,1);check(g.timeRemaining()==0&&g.elapsed()==timeoutElapsed,"Timeout stays frozen at zero");
+ g.reset(1);check(g.timeRemaining()==120&&!g.timedOut(),"Restart restores countdown");
  g.reset(0); auto start=g.player().position;relay::Input move;move.movement={0,1};advance(g,.5F,move);check(glm::distance(start,g.player().position)>1,"WASD movement");
  g.reset(0); relay::Input jump;jump.jumpPressed=jump.jumpHeld=true;advance(g,.25F,jump);check(g.player().position.y>2,"Jump");advance(g,1);check(g.player().grounded,"Landing");
  g.reset(0);relay::Input crouch;crouch.crouchPressed=true;g.update(.01F,crouch);advance(g,.1F);check(g.player().crouching,"Toggle crouch must persist");
@@ -58,7 +65,7 @@ int main(){try{
   check(g.gateUnlocked(),"All cores unlock gate");advance(g,1);check(g.gateOpen()>.98F,"Door opens fully");
   g.warpPlayer(gate+glm::vec3(0,0,2));advance(g,.05F);relay::Input exit;exit.movement={0,-1};advance(g,1,exit);
   check(g.state()==relay::RunState::Won,"Walk through open door to complete");
-  const float finishTime=g.elapsed();advance(g,1);check(g.elapsed()==finishTime,"Completion freezes clock");
+  const float finishTime=g.elapsed(),finishRemaining=g.timeRemaining();advance(g,1);check(g.elapsed()==finishTime&&g.timeRemaining()==finishRemaining,"Completion freezes clock");
   g.reset(level);check(g.collectedCount()==0&&!g.gateUnlocked()&&g.gateOpen()==0&&g.state()==relay::RunState::Playing,"Restart clears progress");
  }
  g.reset(0);g.warpPlayer({14.8F,1,23});check(g.nearestCore()<0,"Core cannot be collected through low block");
