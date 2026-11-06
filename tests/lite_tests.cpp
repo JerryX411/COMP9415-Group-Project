@@ -36,7 +36,7 @@ int main(){try{
  g.reset(0);advance(g,4.1F);g.warpPlayer({14,1,13});g.update(.01F,{});
  const auto hitPosition=g.player().position;const auto push=glm::normalize(g.player().knockback);
  advance(g,.3F);const auto recoil=glm::vec2(g.player().position.x-hitPosition.x,g.player().position.z-hitPosition.z);
- check(glm::dot(recoil,push)>.75F&&glm::length(recoil)<1.05F,"Hit recoils a short step away from damage");
+ check(glm::dot(recoil,push)>1.7F&&glm::length(recoil)<2.1F,"Hit recoils approximately two cells away from damage");
  check(!g.playerIntersectsScene(),"Recoil respects scene collision");
  g.reset(0);advance(g,125);check(!g.timedLevel()&&g.state()==relay::RunState::Playing,"Tutorial has unlimited time");
  g.reset(1);check(g.timeRemaining()==relay::Game::challengeTimeLimit,"Challenge countdown initial value");
