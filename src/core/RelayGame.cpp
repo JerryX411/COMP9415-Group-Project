@@ -283,12 +283,25 @@ void Game::emitImpact(glm::vec3 direction) {
   p=Particle{};
   p.kind=i%3==0?ParticleKind::Debris:ParticleKind::Spark;
   p.position=player_.position+glm::vec3(0,.85F,0)-direction*.32F;
-  p.velocity=direction*1.2F+glm::vec3(std::cos(angle)*(1.4F+.17F*i),1.8F+.23F*(i%5),std::sin(angle)*(1.4F+.17F*i));
+  p.velocity=direction*1.7F+glm::vec3(std::cos(angle)*(1.4F+.17F*i),1.8F+.23F*(i%5),std::sin(angle)*(1.4F+.17F*i));
   p.lifetime=p.remaining=.35F+.065F*(i%7);
-  p.size=p.kind==ParticleKind::Debris?.055F:.025F;
+  p.size=p.kind==ParticleKind::Debris?.055F:.035F;
   p.colour=p.kind==ParticleKind::Debris?glm::vec3(.48F,.55F,.6F):glm::vec3(1,.65F,.24F);
   p.gravity=10; p.drag=1.3F; p.seed=angle;
-  if(emitted==18) break;
+  if(emitted==24) break;
+ }
+}
+void Game::emitCoreSparks(glm::vec3 position) {
+ int emitted=0;
+ for(auto& p:particles_) {
+  if(p.remaining>0)continue;
+  const int i=emitted++;
+  const float angle=i*2.399963F;
+  p=Particle{};p.kind=ParticleKind::Spark;p.position=position;
+  p.velocity={std::cos(angle)*(1.6F+.2F*(i%4)),1.2F+.35F*(i%5),std::sin(angle)*(1.6F+.2F*(i%4))};
+  p.colour=i%4==0?glm::vec3(.85F,1,1):glm::vec3(.2F,.85F,1);
+  p.size=.032F;p.lifetime=p.remaining=.45F+.05F*(i%6);p.drag=2;p.gravity=3.5F;
+  if(emitted==20)break;
  }
 }
 void Game::updateParticles(float dt) {
@@ -311,7 +324,7 @@ void Game::updateInteraction(float dt,bool pressed) {
   if(!interactionCommitted_&&player_.interactionTime<.2F) {
    interactionCommitted_=true;
    if(player_.interaction==Interaction::Core) {
-    if(nearestCore()==interactionIndex_) {cores_[interactionIndex_].collected=true;message_=gateUnlocked()?"All cores collected. Exit unlocked.":"Core collected.";messageTime_=2;}
+    if(nearestCore()==interactionIndex_) {cores_[interactionIndex_].collected=true;emitCoreSparks(cores_[interactionIndex_].position);message_=gateUnlocked()?"All cores collected. Exit unlocked.":"Core collected.";messageTime_=2;}
    } else if(player_.interaction==Interaction::Switch&&nearestSwitch()==interactionIndex_) {
     auto& sw=switches_.at(interactionIndex_);traps_.at(sw.trap).disabledFor=5;sw.animation=1;
     message_="Spikes retracted for 5 seconds.";messageTime_=3;

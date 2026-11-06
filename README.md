@@ -28,4 +28,6 @@ Integrated JerryX411's skybox contribution from Member-B commit db8a1acf1a2562a6
 
 The Tutorial Yard has unlimited time (TIME UNLIMITED). The Obstacle Yard starts with a 120-second countdown, displayed as minutes:seconds and highlighted during the last 20 seconds. Timing pauses with the pause/settings menu or loss of focus and freezes on completion/failure. At zero, TIME UP ends the challenge without applying damage. Restart or level change restores the appropriate limit. Result panels show remaining time or UNLIMITED.
 
-Damage briefly recoils the torso/head/arms in the hit direction and emits 18 small sparks/metal fragments. The fixed 64-particle pool uses gravity, drag, voxel collision/bounce and lifetime cleanup, including after failure; pausing freezes the simulation. No continuous emitter is active. The supplied skybox retains its original image, with a gentle blue lift, horizon haze, mip filtering and slower menu rotation.
+Damage briefly recoils the torso/head/arms in the hit direction and emits 24 small sparks/metal fragments. The fixed 64-particle pool uses gravity, drag, voxel collision/bounce and lifetime cleanup, including after failure; pausing freezes the simulation. No continuous emitter is active. The supplied skybox retains its original image, with a gentle blue lift, horizon haze, mip filtering and slower menu rotation.
+
+Core collection emits one short burst of 20 cyan-white sparks; impact sparks are amber with slightly longer luminous streaks. Both reuse the bounded particle pool and expire automatically.

@@ -261,6 +261,7 @@ class Game {
  std::vector<Pickup> pickups_; std::vector<SpeedPad> pads_; std::vector<BlastDoor> doors_;
  std::array<Particle,64> particles_{};
  void emitImpact(glm::vec3 direction);
+ void emitCoreSparks(glm::vec3 position);
  void updateParticles(float dt);
 };
 } // namespace relay

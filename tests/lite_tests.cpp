@@ -15,10 +15,10 @@ int main(){try{
  const float timeBefore=g.elapsed();g.update(0,{});g.update(-1,{});check(g.elapsed()==timeBefore,"Invalid dt must not move clock");
  g.reset(1);check(g.elapsed()==0,"Level change resets clock");
  g.reset(0);advance(g,4.1F);g.warpPlayer({14,1,13});g.update(.01F,{});
- check(g.liveParticleCount()==18&&g.player().hitBlend>.7F,"Impact produces immediate recoil and a small burst");
+ check(g.liveParticleCount()==24&&g.player().hitBlend>.7F,"Impact produces immediate recoil and a small burst");
  const auto firstParticle=g.particles()[0].position;advance(g,.05F);
  check(glm::distance(firstParticle,g.particles()[0].position)>.01F,"Impact particles move");
- check(g.liveParticleCount()==18,"Damage cooldown prevents repeated bursts");
+ check(g.liveParticleCount()==24,"Damage cooldown prevents repeated bursts");
  relay::SceneModels models;std::vector<relay::Instance> instances;models.append(g,instances);
  bool hasSpark=false;for(const auto& instance:instances)if(instance.blend==relay::Blend::Additive)hasSpark=true;
  check(hasSpark,"Impact sparks reach the renderer");
@@ -59,8 +59,8 @@ int main(){try{
   for(int i=0;i<3;++i){
    g.warpPlayer(cores[i].position-glm::vec3(0,.8F,0));advance(g,.05F);
    check(g.availableInteraction()==relay::Interaction::Core,"Core interaction offered");
-   advance(g,.45F,use);check(g.collectedCount()==i+1,"Core collected once");
-   advance(g,.45F,use);check(g.collectedCount()==i+1,"Duplicate pickup ignored");
+   advance(g,.45F,use);check(g.collectedCount()==i+1,"Core collected once");check(g.liveParticleCount()>0,"Core pickup emits sparks");
+   advance(g,.45F,use);check(g.collectedCount()==i+1,"Duplicate pickup ignored");advance(g,.4F);check(g.liveParticleCount()==0,"Pickup burst expires without duplicate emission");
   }
   check(g.gateUnlocked(),"All cores unlock gate");advance(g,1);check(g.gateOpen()>.98F,"Door opens fully");
   g.warpPlayer(gate+glm::vec3(0,0,2));advance(g,.05F);relay::Input exit;exit.movement={0,-1};advance(g,1,exit);
