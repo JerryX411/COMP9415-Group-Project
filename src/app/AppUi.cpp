@@ -22,11 +22,10 @@ namespace craft::app {
 AppUi::AppUi(graphics::Window& window) {
   IMGUI_CHECKVERSION(); ImGui::CreateContext(); ImGui::StyleColorsDark();
   ImGui::GetIO().IniFilename=nullptr;
-  // One rounded face for everything: Arial Rounded MT Bold is read from the Windows font folder at
-  // run time (not redistributed with the project); elsewhere the bundled Rajdhani is used.
+  // Bold system face, with the bundled Rajdhani as a portable fallback.
   std::filesystem::path face=craft::core::assetPath("fonts/Rajdhani-SemiBold.ttf");
   if(const char* windows=std::getenv("WINDIR")) {
-    const auto rounded=std::filesystem::path(windows)/"Fonts"/"segoeui.ttf";
+    const auto rounded=std::filesystem::path(windows)/"Fonts"/"segoeuib.ttf";
     std::error_code error; if(std::filesystem::exists(rounded,error)) face=rounded;
   }
   auto* fonts=ImGui::GetIO().Fonts;
@@ -57,45 +56,38 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  using namespace relay; using namespace relay::palette;
  auto* d=ImGui::GetBackgroundDrawList(); const auto size=ImGui::GetIO().DisplaySize;
  const float s=std::min(size.x/1440.F,size.y/900.F);
- drawAcrylicRect(d,{28*s,28*s},{350*s,132*s},12*s,.88F);
- drawTracked(d,22*s,{48*s,42*s},graphiteSoft,"ROBOT  /  ARMOUR",2*s,true);
- for(int i=0;i<5;++i) drawSlanted(d,{48*s+i*55*s,84*s},{92*s+i*55*s,108*s},6*s,i<game.player().health?IM_COL32(76,119,153,255):IM_COL32(208,211,216,255),steel);
- drawAcrylicRect(d,{size.x-340*s,28*s},{size.x-28*s,132*s},12*s,.88F);
- drawTracked(d,26*s,{size.x-320*s,48*s},graphite,game.levelName(),1*s,true);
- const std::string progress="CORES  "+std::to_string(game.collectedCount())+" / "+std::to_string(game.cores().size())+(game.gateUnlocked()?"   EXIT OPEN":"");
- drawTracked(d,20*s,{size.x-320*s,90*s},graphite,progress.c_str(),0);
+ const auto label=[&](float x,float y,float font,ImU32 colour,const std::string& value){
+  drawTracked(d,font*s,{x*s,y*s},colour,value.c_str(),0);
+ };
+ const auto centered=[&](float y,float font,ImU32 colour,const std::string& value){
+  const float width=drawTracked(nullptr,font*s,{},colour,value.c_str(),0);
+  drawTracked(d,font*s,{(size.x-width)*.5F,y*s},colour,value.c_str(),0);
+ };
+ const ImU32 main=IM_COL32(242,247,252,255),secondary=IM_COL32(200,217,228,255);
+ const float height=size.y/s;
+ label(40,32,32,game.player().health<=1?danger:main,"ARMOUR  "+std::to_string(game.player().health)+" / 5");
+ const std::string progress="CORES  "+std::to_string(game.collectedCount())+" / "+std::to_string(game.cores().size());
+ label(size.x/s-340,32,30,main,game.levelName());
+ label(size.x/s-390,78,28,game.gateUnlocked()?mint:main,progress+(game.gateUnlocked()?"  /  EXIT OPEN":""));
  const int seconds=int(std::ceil(game.timeRemaining()));
  char clock[48];
  if(game.timedLevel())std::snprintf(clock,sizeof(clock),"TIME  %02d:%02d",seconds/60,seconds%60);
  else std::snprintf(clock,sizeof(clock),"TIME  UNLIMITED");
- drawAcrylicRect(d,{size.x*.5F-145*s,28*s},{size.x*.5F+145*s,100*s},3*s,1);
- drawTracked(d,28*s,{size.x*.5F-122*s,50*s},game.timedLevel()&&game.timeRemaining()<=20?danger:graphite,clock,0);
- drawAcrylicRect(d,{28*s,208*s},{850*s,258*s},3*s,1);
- drawTracked(d,19*s,{44*s,222*s},graphite,game.tutorialHint(),0);
- drawAcrylicRect(d,{28*s,size.y-88*s},{size.x-28*s,size.y-28*s},10*s,.84F);
+ centered(32,36,game.timedLevel()&&game.timeRemaining()<=20?danger:main,clock);
  const auto key=[](KeyAction a){return KeyBindings::keyName(keyBindings()[a]);};
+ if(game.state()==RunState::Playing) {
+  label(40,182,26,secondary,game.tutorialHint());
+  if(game.messageTime()>0)label(40,130,28,main,game.message());
+  if(game.availableInteraction()!=Interaction::None)
+   centered(height-155,34,mint,key(KeyAction::Interact)+(game.availableInteraction()==Interaction::Core?"  COLLECT CORE":"  RETRACT SPIKES"));
+ }
  const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE";
- drawTracked(d,20*s,{48*s,size.y-70*s},graphite,controls.c_str(),.8F*s,true);
- if(game.availableInteraction()!=Interaction::None&&game.state()==RunState::Playing) {
-  drawAcrylicRect(d,{size.x*.5F-225*s,size.y-180*s},{size.x*.5F+225*s,size.y-110*s},12*s,.94F);
-  drawTracked(d,27*s,{size.x*.5F-195*s,size.y-160*s},graphite,(key(KeyAction::Interact)+(game.availableInteraction()==Interaction::Core?"  /  COLLECT CORE":"  /  RETRACT SPIKES")).c_str(),1*s,true);
- }
- if(game.messageTime()>0) {
-  drawAcrylicRect(d,{28*s,146*s},{720*s,196*s},9*s,.9F);
-  drawTracked(d,19*s,{44*s,160*s},graphite,game.message().c_str(),.3F*s);
- }
- if(game.state()==RunState::Won) {
-  drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+195*s},3*s,1);
-  drawTracked(d,38*s,{size.x*.5F-210*s,size.y*.4F+24*s},graphite,"LEVEL COMPLETE",0);
-  drawTracked(d,23*s,{size.x*.5F-230*s,size.y*.4F+140*s},graphite,(key(KeyAction::Restart)+" RESTART   |   ENTER NEXT LEVEL").c_str(),0);
-  if(ImGui::IsKeyPressed(ImGuiKey_Enter,false))levelRequest_=1-game.level();
- }
- if(game.state()==RunState::Won) drawTracked(d,26*s,{size.x*.5F-125*s,size.y*.4F+87*s},graphite,clock,0);
- if(game.state()==RunState::Lost) {
-  drawAcrylicRect(d,{size.x*.5F-280*s,size.y*.4F},{size.x*.5F+280*s,size.y*.4F+195*s},14*s,.97F);
-  drawTracked(d,26*s,{size.x*.5F-125*s,size.y*.4F+87*s},graphite,clock,0);
-  drawTracked(d,44*s,{size.x*.5F-245*s,size.y*.4F+24*s},danger,game.timedOut()?"TIME UP":"ROBOT DISABLED",2*s,true);
-  drawTracked(d,25*s,{size.x*.5F-190*s,size.y*.4F+140*s},graphite,("PRESS "+key(KeyAction::Restart)+" TO RESTART").c_str(),1*s,true);
+ centered(height-60,26,secondary,controls);
+ if(game.state()!=RunState::Playing) {
+  centered(height*.4F,52,game.state()==RunState::Won?mint:danger,game.state()==RunState::Won?"LEVEL COMPLETE":game.timedOut()?"TIME UP":"ROBOT DISABLED");
+  centered(height*.4F+78,32,main,clock);
+  centered(height*.4F+140,28,main,key(KeyAction::Restart)+(game.state()==RunState::Won?" RESTART   /   ENTER NEXT LEVEL":" RESTART"));
+  if(game.state()==RunState::Won&&ImGui::IsKeyPressed(ImGuiKey_Enter,false))levelRequest_=1-game.level();
  }
  return false;
 }

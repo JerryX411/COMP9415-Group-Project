@@ -8,9 +8,9 @@ Removed: arrival cinematic, sprint/boost/slide/wall actions, jetpack, portals, c
 
 Build: `cmake -S . -B build`, then `cmake --build build`. Run `build/CoreExplorerLite.exe` (Windows) or `build/CoreExplorerLite` (Linux). Tests: `ctest --test-dir build --output-on-failure`.
 
-Title and settings use ordinary light panels over a slowly rotating skybox, without the robot showroom, glow or blur. HUD panels are flat.
+Title, pause, settings, HUD and result screens use large bold text only over the scene: no panels, borders, button fills or fullscreen tint. Selected menu text is cyan; armour is shown as a number. A small glyph shadow preserves readability.
 
-UI uses Segoe UI from Windows when available, or the bundled Rajdhani font under its included OFL licence. Robot and map geometry are generated in code.
+UI uses Segoe UI Bold from Windows when available, or the bundled Rajdhani font under its included OFL licence. Robot and map geometry are generated in code.
 
 ## Coursework reference
 
