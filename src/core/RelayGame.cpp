@@ -209,7 +209,8 @@ void Game::reset(int level) {
  }
  cores_={{{9,1.8F,22},false},{{16.5F,1.8F,23},false},{{28,1.8F,13},false}};
  if(level_==1) cores_={{{8,1.8F,22},false},{{24.5F,1.8F,23},false},{{29,2.8F,9},false}};
- message_="Collect 3 cores with E, then walk through the exit."; messageTime_=5;
+ jumpPads_={JumpPad{level_==0?glm::vec3(10,1,19):glm::vec3(26,1,12)}};
+ message_="Collect 3 cores. Cyan arrow pads launch you higher."; messageTime_=5;
 }
 const std::vector<Bounds>& Game::fixtures() const {
  fixtures_.clear();
@@ -368,6 +369,7 @@ void Game::step(float dt,const Input& input) {
  messageTime_=std::max(0.F,messageTime_-dt);
  player_.hurtCooldown=std::max(0.F,player_.hurtCooldown-dt); player_.hitStun=std::max(0.F,player_.hitStun-dt);
  player_.landingPulse=std::max(0.F,player_.landingPulse-5*dt);
+ for(auto& pad:jumpPads_){pad.cooldown=std::max(0.F,pad.cooldown-dt);pad.pulse=std::max(0.F,pad.pulse-dt*3);}
  for(auto& t:traps_) t.disabledFor=std::max(0.F,t.disabledFor-dt);
  for(auto& sw:switches_) sw.animation=std::max(0.F,sw.animation-3*dt);
  updateMovers(dt); if(state_!=RunState::Playing) return;
@@ -396,6 +398,17 @@ void Game::step(float dt,const Input& input) {
  moveAxis(0,player_.velocity.x*dt); moveAxis(2,player_.velocity.z*dt);
  player_.velocity.y-=(player_.velocity.y<0?fallGravity:gravity)*dt;
  player_.grounded=false; moveAxis(1,player_.velocity.y*dt);
+ // Pads are flush with the floor: feet must actually land/step on their surface.
+ for(auto& pad:jumpPads_) if(player_.grounded&&player_.hitStun<=0&&pad.cooldown==0&&
+   std::abs(player_.position.y-pad.position.y)<.08F&&
+   std::abs(player_.position.x-pad.position.x)<.8F&&std::abs(player_.position.z-pad.position.z)<.8F) {
+  player_.velocity.y=jumpPadSpeed;player_.grounded=false;player_.jumpActive=false;
+  player_.jumpBuffer=player_.coyoteTime=0;player_.landingPulse=0;player_.motion.launchAge=0;
+  pad.cooldown=.4F;pad.pulse=1;
+  emitCoreSparks(pad.position+glm::vec3(0,.1F,0));
+  message_="Jump pad! Steer in the air with movement keys.";messageTime_=2;
+  break;
+ }
  for(std::size_t i=0;i<traps_.size();++i) if(trapPhase(i)==TrapPhase::Active&&traps_[i].touchesFeet(player_.position,footRadius)) applyDamage((traps_[i].area.min+traps_[i].area.max)*.5F,int(i));
  if(player_.position.y<-5) { state_=RunState::Lost; player_.health=0; }
  if(state_==RunState::Playing&&gateUnlocked()&&gateOpen_>.98F&&std::abs(player_.position.x-gatePosition().x)<1.1F&&player_.position.z<gatePosition().z-.35F&&player_.position.z>gatePosition().z-1.8F&&player_.position.y<1.5F) {

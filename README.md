@@ -31,3 +31,7 @@ The Tutorial Yard has unlimited time (TIME UNLIMITED). The Obstacle Yard starts 
 Damage briefly recoils the torso/head/arms in the hit direction and emits 24 small sparks/metal fragments. The fixed 64-particle pool uses gravity, drag, voxel collision/bounce and lifetime cleanup, including after failure; pausing freezes the simulation. No continuous emitter is active. The supplied skybox retains its original image, with a gentle blue lift, horizon haze, mip filtering and slower menu rotation.
 
 Core collection emits one short burst of 20 cyan-white sparks; impact sparks are amber with slightly longer luminous streaks. Both reuse the bounded particle pool and expire automatically.
+
+## Jump pads
+
+Each yard has one flush cyan chevron pad (tutorial: 10,1,19; obstacle: 26,1,12). Step or land on it to launch automatically about 4.3 cells above the floor, versus roughly 1.8 for a held normal jump. No Space press/hold is needed; steer in the air with WASD. A brief cyan spark burst marks launch. Landing on it bounces again, while passing above it does not trigger it. Normal ceiling and wall collisions still apply.

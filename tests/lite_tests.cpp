@@ -45,6 +45,19 @@ int main(){try{
  advance(g,120);check(g.timedOut()&&g.timeRemaining()==0&&g.player().health==5,"Timeout fails without damaging robot");
  const float timeoutElapsed=g.elapsed();advance(g,1);check(g.timeRemaining()==0&&g.elapsed()==timeoutElapsed,"Timeout stays frozen at zero");
  g.reset(1);check(g.timeRemaining()==120&&!g.timedOut(),"Restart restores countdown");
+ for(int level=0;level<2;++level){
+  g.reset(level);check(g.jumpPads().size()==1,"Each map has a jump pad");
+  const auto pad=g.jumpPads()[0].position;g.warpPlayer(pad);g.update(.01F,{});
+  check(g.player().velocity.y>14&&!g.player().grounded,"Standing on pad launches automatically");
+  float peak=0;for(int i=0;i<90;++i){g.update(1.F/120,{});peak=std::max(peak,g.player().position.y-pad.y);}
+  check(peak>4&&peak<4.5F,"Pad jumps higher without holding Space");
+  check(g.jumpPads()[0].pulse==0,"Pad feedback decays in flight");
+  bool bounced=false;for(int i=0;i<120;++i){g.update(1.F/120,{});if(g.player().velocity.y>14){bounced=true;break;}}
+  check(bounced,"Landing on pad triggers another bounce");
+  g.reset(level);g.warpPlayer(g.jumpPads()[0].position+glm::vec3(0,2,0));g.update(.05F,{});
+  check(g.player().velocity.y<0&&g.jumpPads()[0].pulse==0,"Passing above pad does not trigger it");
+  g.reset(level);check(g.jumpPads()[0].pulse==0&&g.jumpPads()[0].cooldown==0,"Restart resets pad");
+ }
  g.reset(0); auto start=g.player().position;relay::Input move;move.movement={0,1};advance(g,.5F,move);check(glm::distance(start,g.player().position)>1,"WASD movement");
  g.reset(0); relay::Input jump;jump.jumpPressed=jump.jumpHeld=true;advance(g,.25F,jump);check(g.player().position.y>2,"Jump");advance(g,1);check(g.player().grounded,"Landing");
  g.reset(0);relay::Input crouch;crouch.crouchPressed=true;g.update(.01F,crouch);advance(g,.1F);check(g.player().crouching,"Toggle crouch must persist");

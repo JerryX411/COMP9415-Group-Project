@@ -87,6 +87,7 @@ struct Player {
   glm::vec3 interactionTarget{};
   CourierMotion motion;
 };
+struct JumpPad { glm::vec3 position{}; float cooldown=0, pulse=0; };
 struct Core { glm::vec3 position{}; bool collected = false; };
 // Beacon a courier activates with E; after a destroying blow it reboots at the last one.
 struct Checkpoint {
@@ -224,6 +225,8 @@ class Game {
  float shadowHeight() const; const char* levelName() const{return nameOf(level_);} static const char* nameOf(int level);
  float bodyHeight() const{return player_.crouching?crouchHeight:playerHeight;}
  const VoxelWorld& world() const{return world_;} const Player& player() const{return player_;}
+ static constexpr float jumpPadSpeed=15.F;
+ const std::vector<JumpPad>& jumpPads() const{return jumpPads_;}
  const std::vector<FloorTrap>& traps() const{return traps_;}
  const std::vector<RelaySwitch>& switches() const{return switches_;}
  const std::vector<MovingHazard>& movers() const{return movers_;}
@@ -257,6 +260,7 @@ class Game {
  float elapsed_=0,remaining_=0,gateOpen_=0,hitStop_=0,messageTime_=0;
  std::string message_;
  std::vector<FloorTrap> traps_; std::vector<RelaySwitch> switches_; std::vector<MovingHazard> movers_;
+ std::vector<JumpPad> jumpPads_;
  std::vector<Core> cores_; std::vector<Checkpoint> checkpoints_; std::vector<PortalLink> portals_;
  std::vector<Pickup> pickups_; std::vector<SpeedPad> pads_; std::vector<BlastDoor> doors_;
  std::array<Particle,64> particles_{};

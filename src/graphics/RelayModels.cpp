@@ -280,6 +280,13 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
   appendBox(out,c.position-glm::vec3(0,.65F,0),{.65F,.1F,.65F},{.28F,.32F,.36F});
   appendBox(out,c.position,{.42F,.55F,.42F},{.25F,.65F,.85F},.12F,0);
  }
+ for(const auto& pad:game.jumpPads()) {
+  appendBox(out,pad.position+glm::vec3(0,.012F,0),{1.8F,.024F,1.8F},dark,0,.6F);
+  appendBox(out,pad.position+glm::vec3(0,.03F,0),{1.5F,.024F,1.5F},{.07F,.32F,.4F},.15F);
+  for(float z:{-.35F,.25F}) for(float side:{-1.F,1.F})
+   appendBox(out,pad.position+glm::vec3(side*.23F,.05F,z),{.65F,.03F,.13F},mint,.5F+pad.pulse*.5F,0,side*.65F);
+  if(pad.pulse>0)appendGlow(out,pad.position+glm::vec3(0,.1F,0),{1.8F,.16F,1.8F},mint,.18F*pad.pulse,.4F);
+ }
  const auto g=game.gatePosition();
  const glm::vec3 lamp=game.gateUnlocked()?glm::vec3(.3F,.7F,.4F):glm::vec3(.8F,.35F,.25F);
  for(float side:{-1.F,1.F}) {
