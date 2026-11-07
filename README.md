@@ -48,3 +48,7 @@ Each yard has one flush cyan chevron pad (tutorial: 10,1,19; obstacle: 26,1,12).
 Normal mapping is enabled by default. During play: **F1** toggles diagnostics, **F2** toggles normal mapping, **F3** shows OFF on the left and ON on the right, **F4** freezes/unfreezes simulation, **F5** cycles normal strength (0 to 2), **F6** toggles hidden-face removal for the core optimisation comparison. These keys are reserved from gameplay rebinding. Diagnostics show camera position, FOV, geometry/draw counts and live particle occupancy. The normal HUD remains frameless and unchanged with diagnostics closed.
 
 See [docs/CHALLENGES.md](docs/CHALLENGES.md) for implementation, reproducible demonstrations and the exact benchmark procedure. No third challenge is claimed: hidden-face removal is the core optimisation. Linux/VLAB verification and the final assessed report remain outstanding.
+
+## Space-test-facility materials
+
+Five original procedural material layers replace the single shared surface texture: warm-white ceramic wall/shell panels, cool dark tread-steel floors, brushed alloy doors/equipment, matte rubber base strips/blocks, and painted casings. Each has its own albedo and tangent-space normal texture plus specular exponent/strength. Cyan remains the interaction/energy accent; amber/red remain hazard feedback. Wall panel joints and cool floor lane bands help orientation. F2/F3/F5 compare the normal detail on all layers. No Portal 2 textures or other game assets are copied. This remains the existing Blinn-Phong material system, not an additional PBR challenge.

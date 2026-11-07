@@ -3,7 +3,8 @@ in vec3 vPosition, vNormal, vTangent, vColour;
 in vec2 vUv;
 in float vAlpha;
 flat in vec4 vMaterial;
-uniform sampler2D uAlbedo, uNormal;
+flat in float vSurface;
+uniform sampler2DArray uAlbedo, uNormal;
 uniform bool uNormalMapping, uNormalCompare;
 uniform float uNormalStrength, uSplitX;
 uniform vec3 uEye, uFogColour;
@@ -64,21 +65,27 @@ void main() {
       b=cross(n,t)*(dot(cross(n,t),dv)<0.0?-1.0:1.0);
     }
   }
+  int surface=int(clamp(vSurface,1.0,5.0))-1;
+  vec3 materialUv=vec3(vUv,float(surface));
+  // Ceramic, tread steel, brushed alloy, rubber, painted casing.
+  float gloss=surface==0?80.0:surface==1?24.0:surface==2?110.0:surface==3?8.0:48.0;
+  float reflectance=surface==0?.25:surface==1?.20:surface==2?.65:surface==3?.025:.18;
+  float relief=surface==0?.7:surface==1?1.0:surface==2?.45:surface==3?.65:.45;
   bool mapped=uNormalCompare?gl_FragCoord.x>=uSplitX:uNormalMapping;
   if(mapped && uNormalStrength>0.0) {
-    vec3 detail=texture(uNormal,vUv).xyz*2.0-1.0;
-    detail.xy*=mix(1.0,.18,vMaterial.x);
+    vec3 detail=texture(uNormal,materialUv).xyz*2.0-1.0;
+    detail.xy*=relief;
     detail.xy *= uNormalStrength;
     n=normalize(mat3(t,b,n)*normalize(detail));
   }
-  vec3 albedo=vColour*mix(texture(uAlbedo,vUv).rgb,vec3(.98),vMaterial.x*.8);
+  vec3 albedo=vColour*texture(uAlbedo,materialUv).rgb;
   float diffuse=max(dot(n,light),0.0);
-  float specular=pow(max(dot(n,normalize(light+view)),0.0),mix(12.0,56.0,vMaterial.x));
+  float specular=pow(max(dot(n,normalize(light+view)),0.0),gloss);
   float sky=.5+.5*n.y;
   vec3 ambient=mix(vec3(.20,.22,.24),vec3(.48,.52,.56),sky);
   float rim=pow(1.0-max(dot(n,view),0.0),3.0)*.13*vMaterial.x;
   float fill=max(dot(n,normalize(vec3(.6,.4,-.8))),0.0)*.24;
-  vec3 colour=albedo*(ambient+.66*diffuse+fill)+vec3(.85,.93,1.0)*(specular*vMaterial.z+rim)+albedo*vMaterial.y;
+  vec3 colour=albedo*(ambient+.66*diffuse+fill)+vec3(.85,.93,1.0)*(specular*reflectance+rim*.35)+albedo*vMaterial.y;
   colour+=albedo*effectLight(n);
   colour=mix(colour,uFogColour,fog);
   fragColour=vec4(colour,vAlpha);

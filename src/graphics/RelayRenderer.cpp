@@ -10,7 +10,7 @@
 
 namespace relay {
 namespace {
-struct Vertex { glm::vec3 p, n; glm::vec2 uv; glm::vec3 tangent, colour; };
+struct Vertex { glm::vec3 p, n; glm::vec2 uv; glm::vec3 tangent, colour; float surface=0; };
 const std::array<glm::ivec3, 6> directions{{{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}}};
 void face(std::vector<Vertex>& vertices, glm::vec3 centre, glm::vec3 normal, glm::vec3 colour) {
   const auto tangent = std::abs(normal.y) > .5F ? glm::vec3(1,0,0) : glm::normalize(glm::cross(glm::vec3(0,1,0), normal));
@@ -29,6 +29,8 @@ void meshAttributes(unsigned vao, unsigned vertices, unsigned instances, std::si
     glEnableVertexAttribArray(i);
     glVertexAttribPointer(i, i==2?2:3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsets[i]));
   }
+  glEnableVertexAttribArray(11);
+  glVertexAttribPointer(11,1,GL_FLOAT,GL_FALSE,sizeof(Vertex),reinterpret_cast<void*>(offsetof(Vertex,surface)));
   glBindBuffer(GL_ARRAY_BUFFER, instances);
   for (unsigned i=0; i<4; ++i) {
     glEnableVertexAttribArray(5+i);
@@ -43,13 +45,13 @@ void meshAttributes(unsigned vao, unsigned vertices, unsigned instances, std::si
   glBindVertexArray(0);
 }
 unsigned texture(const std::vector<unsigned char>& data) {
-  unsigned id; glGenTextures(1,&id); glBindTexture(GL_TEXTURE_2D,id);
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,64,64,0,GL_RGB,GL_UNSIGNED_BYTE,data.data());
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
-  glGenerateMipmap(GL_TEXTURE_2D); return id;
+  unsigned id; glGenTextures(1,&id); glBindTexture(GL_TEXTURE_2D_ARRAY,id);
+  glTexImage3D(GL_TEXTURE_2D_ARRAY,0,GL_RGB8,64,64,5,0,GL_RGB,GL_UNSIGNED_BYTE,data.data());
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_WRAP_S,GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_WRAP_T,GL_REPEAT);
+  glGenerateMipmap(GL_TEXTURE_2D_ARRAY); return id;
 }
 // Shared bevelled primitive: six face panels, twelve edge strips and eight corners.
 // Voxel terrain stays cubic; articulated parts gain a readable machined silhouette.
@@ -104,12 +106,7 @@ std::vector<Vertex> roundPrimitive(bool cylinder,int slices=24,int stacks=14) {
   }
   return v;
 }
-float heightAt(int x, int y) {
-  x = (x+64)%64; y = (y+64)%64;
-  const float edge=float(std::min({x,64-x,y,64-y}));
-  const float bevel=std::clamp(edge/3.F,0.F,1.F);
-  return -.035F*(1-bevel)*(1-bevel)+.002F*std::sin(float(x)*.8F)*std::sin(float(y)*.6F);
-}
+
 }
 
 Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), craft::core::assetPath("shaders/relay.frag")),
@@ -131,13 +128,34 @@ Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), cra
   glBindBuffer(GL_ARRAY_BUFFER,terrainInstance_); glBufferData(GL_ARRAY_BUFFER,sizeof(Instance),&identity,GL_STATIC_DRAW);
   meshAttributes(cubeVao_,cubeBuffer_,instanceBuffer_);
   meshAttributes(terrainVao_,terrainBuffer_,terrainInstance_);
-  std::vector<unsigned char> colour(64*64*3), normals(colour.size());
-  for (int y=0; y<64; ++y) for(int x=0; x<64; ++x) {
-    const int i=(y*64+x)*3;
-    const int value = x<1||y<1 ? 156 : 242+(x*13+y*7)%5;
-    for(int c=0;c<3;++c) colour[std::size_t(i+c)] = static_cast<unsigned char>(value);
-    const auto n=glm::normalize(glm::vec3(-(heightAt(x+1,y)-heightAt(x-1,y))*32, -(heightAt(x,y+1)-heightAt(x,y-1))*32,1));
-    for(int c=0;c<3;++c) normals[std::size_t(i+c)] = static_cast<unsigned char>((n[c]*.5F+.5F)*255);
+  std::vector<unsigned char> colour(64*64*3*5), normals(colour.size());
+  const auto height=[](int material,int x,int y) {
+   x=(x+64)%64;y=(y+64)%64;
+   const float edge=float(std::min({x,64-x,y,64-y}));
+   const float bevel=std::clamp(edge/3.F,0.F,1.F);
+   const float seam=-.022F*(1-bevel)*(1-bevel);
+   if(material==0)return seam; // clean ceramic, shallow panel joint
+   if(material==1){ // raised staggered tread, with broad plate seams
+    const int row=y/16,xx=(x+(row%2)*8)%16,yy=y%16;
+    const float ridge=(xx>3&&xx<12&&yy>5&&yy<10)?.010F:0.F;
+    return seam+ridge;
+   }
+   if(material==2)return seam*.35F+.0012F*std::sin(float(y)*3.14159265F*.5F); // brushed alloy
+   if(material==3)return -.008F*((x%8<2||y%8<2)?1.F:0.F); // rubber grid
+   return seam*.5F+.0007F*std::sin(float(x)*.785398F)*std::sin(float(y)*.785398F); // painted casing
+  };
+  for(int material=0;material<5;++material)for(int y=0;y<64;++y)for(int x=0;x<64;++x) {
+   const int i=((material*64+y)*64+x)*3;
+   const float edge=float(std::min({x,64-x,y,64-y}));
+   const float noise=float((x*13+y*7)%5)/255.F;
+   float base=.98F;
+   if(material==0)base=edge<1?.65F:.98F-noise*.3F;
+   if(material==1)base=edge<1?.48F:.83F+height(material,x,y)*6+noise;
+   if(material==2)base=.85F+.07F*std::sin(float(y)*1.570796F)+noise;
+   if(material==3)base=(x%8<2||y%8<2)?.57F:.83F+noise;
+   if(material==4)base=edge<1?.7F:.95F-noise;
+   const auto n=glm::normalize(glm::vec3(-(height(material,x+1,y)-height(material,x-1,y))*32,-(height(material,x,y+1)-height(material,x,y-1))*32,1));
+   for(int c=0;c<3;++c){colour[std::size_t(i+c)]=static_cast<unsigned char>(std::clamp(base,0.F,1.F)*255);normals[std::size_t(i+c)]=static_cast<unsigned char>((n[c]*.5F+.5F)*255);}
   }
   albedo_=texture(colour); normal_=texture(normals);
   instances_.reserve(1024);
@@ -163,11 +181,14 @@ void Renderer::rebuildTerrain(const Game& game, bool optimised, bool whitebox) {
       if(!optimised || exposed) {
         auto c=colour;
         if(!whitebox) {
-          if(y==0&&((x/4+z/4)%2)) c*=.83F;
+          if(y==0) c={.25F,.30F,.34F};
+          if(y==0&&(x==7||x==32))c={.38F,.48F,.51F};
           if(y>0&&y==1&&material==2) c={.18F,.21F,.23F};
-          if(y>0&&material==2&&(x%7==0||z%7==0)) c*=.8F;
+          if(y>1&&material==2&&(x%8==0||z%8==0)) c={.43F,.48F,.50F};
         }
         face(vertices,glm::vec3(x+.5F,y+.5F,z+.5F),glm::vec3(n),c);
+        const float surface=y==0?2.F:y==1?4.F:1.F;
+        for(std::size_t v=vertices.size()-6;v<vertices.size();++v)vertices[v].surface=surface;
       }
     }
   }
@@ -276,8 +297,8 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
     const std::string index="["+std::to_string(i)+"]";
     shader_.setVec4("uLightPosition"+index,lightPosition_[std::size_t(i)]); shader_.setVec4("uLightColour"+index,lightColour_[std::size_t(i)]);
   }
-  glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,albedo_);
-  glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D,normal_);
+  glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D_ARRAY,albedo_);
+  glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D_ARRAY,normal_);
   if(!options.gallery&&!options.menu) { glBindVertexArray(terrainVao_); glDrawArraysInstanced(GL_TRIANGLES,0,terrainVertices_,1); }
   for(int i=0;i<groups;++i) if(instanceCount_[i]) {
     // Soft effects test against the scene but never hide each other.

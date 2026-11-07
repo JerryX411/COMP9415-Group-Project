@@ -10,7 +10,7 @@ Normal mapping adds no vertices. Verify identical triangle counts when switching
 
 ## Normal mapping implementation
 
-`RelayRenderer.cpp` generates a periodic 64x64 normal texture from a shallow height field containing tile grooves and microtexture. Central differences are scaled by texel spacing (32 for a central difference over two texels of a unit UV tile), encoded from [-1,1] to [0,1], uploaded as linear RGB data and mip-filtered. No downloaded texture is used for this normal map.
+`RelayRenderer.cpp` generates five periodic 64x64 albedo/normal texture-array layers for ceramic, tread steel, brushed alloy, rubber and painted casing. Each layer has its own height field. Central differences are scaled by texel spacing (32 for a central difference over two texels of a unit UV tile), encoded from [-1,1] to [0,1], uploaded as linear RGB texture-array data and mip-filtered. No downloaded texture is used for this normal map.
 
 The vertex shader transforms normals by inverse-transpose and positions to world space. The fragment shader derives U and V directions from `dFdx/dFdy` of world position and UV, orthogonalises U against the interpolated normal, and obtains bitangent handedness from V. This handles cylinder-cap UV orientation and non-uniform object scaling. A mesh-tangent fallback handles degenerate derivatives. The sampled normal is decoded, its XY strength adjusted, normalised, transformed through TBN, and used by the existing diffuse/specular lighting. The basic lighting model remains Blinn-Phong; no BRDF challenge is claimed.
 
@@ -51,9 +51,9 @@ Each row has 60 unmeasured warm-up scene frames and exactly 240 measured frames.
 
 CSV rows contain mean ms/frame, submitted triangles, draw calls, solid voxels, exposed faces and live particles. The header records GPU/driver and frozen conditions. Two PNGs next to the CSV capture the first baseline and optimised result for image comparison. Resizing/cancelling produces an error; do not use incomplete CSVs. Output parent directories must exist. Run on the intended assessment hardware too; local Windows numbers are not VLAB validation.
 
-## Local measurement record (2026-11-08)
+## Local measurement record (2026-11-08, before the five-material art pass)
 
-Windows x64 Release on NVIDIA RTX 4060 Laptop GPU, driver 621.01. Raw rows: `benchmarks/windows-20261108-level0.csv` and `benchmarks/windows-20261108-level1.csv`.
+These retained measurements precede the five-material update and must be rerun for final submission. Windows x64 Release on NVIDIA RTX 4060 Laptop GPU, driver 621.01. Raw rows: `benchmarks/windows-20261108-level0.csv` and `benchmarks/windows-20261108-level1.csv`.
 
 | Scene | Baseline mean of 3 trials (ms) | Optimised mean (ms) | Submitted triangles, before / after | Draw calls |
 |---|---:|---:|---:|---:|
