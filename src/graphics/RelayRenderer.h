@@ -8,6 +8,8 @@
 namespace relay {
 struct RenderOptions {
   bool normalMapping = true, optimised = true, whitebox = false;
+  bool normalCompare=false;
+  float normalStrength=1.F;
   bool gallery = false, diagnostics = false;
   bool menu = false, overview = false;
   bool collisionOverlay = false;

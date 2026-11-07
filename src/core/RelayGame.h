@@ -231,7 +231,7 @@ class Game {
  const std::vector<RelaySwitch>& switches() const{return switches_;}
  const std::vector<MovingHazard>& movers() const{return movers_;}
  RunState state() const{return state_;} int level() const{return level_;} int revision() const{return revision_;}
- const std::array<Particle,64>& particles() const{return particles_;}
+ const std::array<Particle,128>& particles() const{return particles_;}
  static constexpr float challengeTimeLimit=120.F;
  bool timedLevel() const{return level_!=0;}
  float timeRemaining() const{return remaining_;}
@@ -263,7 +263,7 @@ class Game {
  std::vector<JumpPad> jumpPads_;
  std::vector<Core> cores_; std::vector<Checkpoint> checkpoints_; std::vector<PortalLink> portals_;
  std::vector<Pickup> pickups_; std::vector<SpeedPad> pads_; std::vector<BlastDoor> doors_;
- std::array<Particle,64> particles_{};
+ std::array<Particle,128> particles_{};
  void emitImpact(glm::vec3 direction);
  void emitCoreSparks(glm::vec3 position);
  void emitLiftParticles(glm::vec3 position,bool trail);

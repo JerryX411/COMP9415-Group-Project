@@ -4,7 +4,8 @@ in vec2 vUv;
 in float vAlpha;
 flat in vec4 vMaterial;
 uniform sampler2D uAlbedo, uNormal;
-uniform bool uNormalMapping;
+uniform bool uNormalMapping, uNormalCompare;
+uniform float uNormalStrength, uSplitX;
 uniform vec3 uEye, uFogColour;
 uniform float uFogDensity;
 // Map-edge cutaway: room floor bounds (min x, min z, max x, max z). When the camera is beyond
@@ -47,12 +48,28 @@ void main() {
     fragColour=vec4(mix(glow,uFogColour,fog*.6),vAlpha*soft);
     return;
   }
+  // Derive the UV basis from world-space derivatives. This retains UV handedness
+  // on caps/mirrored charts and accounts for non-uniform model scaling.
+  vec3 dpdx=dFdx(vPosition), dpdy=dFdy(vPosition);
+  vec2 duvdx=dFdx(vUv), duvdy=dFdy(vUv);
+  float det=duvdx.x*duvdy.y-duvdx.y*duvdy.x;
   vec3 t=normalize(vTangent-n*dot(n,vTangent));
-  if(uNormalMapping) {
+  vec3 b=cross(n,t);
+  if(abs(det)>1e-10) {
+    vec3 du=(dpdx*duvdy.y-dpdy*duvdx.y)/det;
+    vec3 dv=(dpdy*duvdx.x-dpdx*duvdy.x)/det;
+    vec3 tangent=du-n*dot(n,du);
+    if(dot(tangent,tangent)>1e-12) {
+      t=normalize(tangent);
+      b=cross(n,t)*(dot(cross(n,t),dv)<0.0?-1.0:1.0);
+    }
+  }
+  bool mapped=uNormalCompare?gl_FragCoord.x>=uSplitX:uNormalMapping;
+  if(mapped && uNormalStrength>0.0) {
     vec3 detail=texture(uNormal,vUv).xyz*2.0-1.0;
     detail.xy*=mix(1.0,.18,vMaterial.x);
-    detail.xy *= 3.0;
-    n=normalize(mat3(t,cross(n,t),n)*normalize(detail));
+    detail.xy *= uNormalStrength;
+    n=normalize(mat3(t,b,n)*normalize(detail));
   }
   vec3 albedo=vColour*mix(texture(uAlbedo,vUv).rgb,vec3(.98),vMaterial.x*.8);
   float diffuse=max(dot(n,light),0.0);

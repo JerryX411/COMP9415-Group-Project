@@ -331,7 +331,7 @@ void Game::updateParticles(float dt) {
   for(int axis=0;axis<3;++axis) {
    const float before=p.position[axis];p.position[axis]+=p.velocity[axis]*dt;
    const glm::vec3 radius(p.size*.5F);
-   if(world_.collides({p.position-radius,p.position+radius})) {
+   if(blocked({p.position-radius,p.position+radius})) {
     p.position[axis]=before;p.velocity[axis]*=-.3F;p.bounced=true;
    }
   }

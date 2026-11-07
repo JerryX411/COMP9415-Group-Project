@@ -1,0 +1,9 @@
+# GPU: NVIDIA GeForce RTX 4060 Laptop GPU/PCIe/SSE2; OpenGL: 3.3.0 NVIDIA 621.01
+# Frozen: level=1; world=64x64x64; pad launch after 24 steps at 1/120s; eye=20,17,38; target=20,1,19; FOV=50; near=0.1; far=300; normal_strength=1; skybox and particles included
+repeat,mode,width,height,warmup,measured,mean_ms,triangles,draw_calls,solid_voxels,exposed_faces,particles
+1,baseline,1920,1080,60,240,0.447208,69437,8,1653,3394,35
+1,optimized,1920,1080,60,240,0.190738,56389,8,1653,3394,35
+2,optimized,1920,1080,60,240,0.189337,56389,8,1653,3394,35
+2,baseline,1920,1080,60,240,0.319117,69437,8,1653,3394,35
+3,baseline,1920,1080,60,240,0.323500,69437,8,1653,3394,35
+3,optimized,1920,1080,60,240,0.187142,56389,8,1653,3394,35

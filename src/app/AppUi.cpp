@@ -122,7 +122,7 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
   if(game.availableInteraction()!=Interaction::None)
    centered(height-155,34,mint,key(KeyAction::Interact)+(game.availableInteraction()==Interaction::Core?"  COLLECT CORE":"  RETRACT SPIKES"));
  }
- const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE";
+ const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE   F1 GRAPHICS";
  centered(height-28,20,secondary,controls);
  if(game.state()!=RunState::Playing) {
   centered(height*.4F,52,game.state()==RunState::Won?mint:danger,game.state()==RunState::Won?"LEVEL COMPLETE":game.timedOut()?"TIME UP":"ROBOT DISABLED");
@@ -131,5 +131,23 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
   if(game.state()==RunState::Won&&ImGui::IsKeyPressed(ImGuiKey_Enter,false))levelRequest_=1-game.level();
  }
  return false;
+}
+void AppUi::drawDiagnostics(const relay::Game& game,const relay::RenderOptions& options,const relay::Renderer& renderer,const relay::FollowCamera& camera,bool frozen) {
+ const auto size=ImGui::GetIO().DisplaySize;const float s=std::min(size.x/1440.F,size.y/900.F);
+ auto* d=ImGui::GetForegroundDrawList();
+ const auto text=[&](float x,float y,const std::string& value){relay::drawTracked(d,22*s,{x*s,y*s},relay::palette::ice,value.c_str(),0);};
+ if(options.normalCompare){text(size.x/s*.25F-95,100,"NORMAL MAP OFF");text(size.x/s*.75F-95,100,"NORMAL MAP ON");}
+ if(frozen)text(size.x/s*.5F-110,220,"FROZEN  /  F4 RESUME");
+ if(!options.diagnostics)return;
+ const auto stats=renderer.stats();const auto eye=camera.eye();char value[180];float y=260;
+ const auto row=[&](const std::string& v){text(40,y,v);y+=30;};
+ row("F1 DIAGNOSTICS  |  F4 FREEZE: "+std::string(frozen?"ON":"OFF"));
+ row("F2 NORMAL MAP: "+std::string(options.normalMapping?"ON":"OFF")+"  |  F3 SPLIT: "+(options.normalCompare?"ON":"OFF"));
+ std::snprintf(value,sizeof(value),"F5 STRENGTH %.1f  |  F6 HIDDEN-FACE REMOVAL: %s",options.normalStrength,options.optimised?"ON":"OFF");row(value);
+ std::snprintf(value,sizeof(value),"CAMERA  %.2f, %.2f, %.2f  |  FOV %.1f",eye.x,eye.y,eye.z,camera.fov());row(value);
+ row("TRIANGLES "+std::to_string(stats.submittedTriangles)+"  |  DRAW CALLS "+std::to_string(stats.drawCalls));
+ row("SOLID VOXELS "+std::to_string(stats.voxels)+"  |  EXPOSED FACES "+std::to_string(stats.visibleFaces));
+ row("PARTICLES "+std::to_string(game.liveParticleCount())+" / "+std::to_string(game.particles().size())+"  |  WORLD 64 x 64 x 64");
+ row("BENCHMARK: --benchmark --benchmark-output result.csv");
 }
 } // namespace craft::app

@@ -58,22 +58,12 @@ bool SceneBenchmark::endSceneFrame() {
 }
 
 BenchmarkSnapshot SceneBenchmark::snapshot() const noexcept {
-  return {
-      .running = running_,
-      .complete = complete_,
-      .warmupFrames = warmupFrames_,
-      .requiredWarmupFrames = kWarmupFrames,
-      .measuredFrames = measuredFrames_,
-      .requiredMeasuredFrames = kMeasuredFrames,
-      .averageMilliseconds =
-          measuredFrames_ > 0
-              ? totalMilliseconds_ / static_cast<double>(measuredFrames_)
-              : 0.0,
-      .averageFramesPerSecond = totalMilliseconds_ > 0.0
-                                    ? static_cast<double>(measuredFrames_) *
-                                          1000.0 / totalMilliseconds_
-                                    : 0.0,
-  };
+  BenchmarkSnapshot result;
+  result.running=running_;result.complete=complete_;result.warmupFrames=warmupFrames_;
+  result.requiredWarmupFrames=kWarmupFrames;result.measuredFrames=measuredFrames_;result.requiredMeasuredFrames=kMeasuredFrames;
+  result.averageMilliseconds=measuredFrames_>0?totalMilliseconds_/double(measuredFrames_):0;
+  result.averageFramesPerSecond=totalMilliseconds_>0?double(measuredFrames_)*1000/totalMilliseconds_:0;
+  return result;
 }
 
 bool benchmarkRequestedFromEnvironment() {

@@ -60,6 +60,11 @@ int main(){try{
   check(g.player().velocity.y<0&&g.jumpPads()[0].pulse==0,"Passing above pad does not trigger it");
   g.reset(level);check(g.jumpPads()[0].pulse==0&&g.jumpPads()[0].cooldown==0,"Restart resets pad");
  }
+ g.reset(0);advance(g,4.1F);
+ g.warpPlayer(g.jumpPads()[0].position);g.update(.01F,{});advance(g,.12F);
+ g.warpPlayer({14,1,13});g.update(.01F,{});
+ check(g.liveParticleCount()>=50&&g.liveParticleCount()<=int(g.particles().size()),"Overlapping pad and hit bursts keep their particles");
+ g.warpPlayer({8,1,25});advance(g,1.2F);check(g.liveParticleCount()==0,"Overlapping particles fully recycle");
  g.reset(0); auto start=g.player().position;relay::Input move;move.movement={0,1};advance(g,.5F,move);check(glm::distance(start,g.player().position)>1,"WASD movement");
  g.reset(0); relay::Input jump;jump.jumpPressed=jump.jumpHeld=true;advance(g,.25F,jump);check(g.player().position.y>2,"Jump");advance(g,1);check(g.player().grounded,"Landing");
  g.reset(0);relay::Input crouch;crouch.crouchPressed=true;g.update(.01F,crouch);advance(g,.1F);check(g.player().crouching,"Toggle crouch must persist");

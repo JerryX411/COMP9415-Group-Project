@@ -106,7 +106,9 @@ std::vector<Vertex> roundPrimitive(bool cylinder,int slices=24,int stacks=14) {
 }
 float heightAt(int x, int y) {
   x = (x+64)%64; y = (y+64)%64;
-  return (x<1 || y<1 ? -.055F : .0F) + .002F*std::sin(float(x)*.8F)*std::sin(float(y)*.6F);
+  const float edge=float(std::min({x,64-x,y,64-y}));
+  const float bevel=std::clamp(edge/3.F,0.F,1.F);
+  return -.035F*(1-bevel)*(1-bevel)+.002F*std::sin(float(x)*.8F)*std::sin(float(y)*.6F);
 }
 }
 
@@ -134,7 +136,7 @@ Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), cra
     const int i=(y*64+x)*3;
     const int value = x<1||y<1 ? 156 : 242+(x*13+y*7)%5;
     for(int c=0;c<3;++c) colour[std::size_t(i+c)] = static_cast<unsigned char>(value);
-    const auto n=glm::normalize(glm::vec3(-(heightAt(x+1,y)-heightAt(x-1,y))*5, -(heightAt(x,y+1)-heightAt(x,y-1))*5,1));
+    const auto n=glm::normalize(glm::vec3(-(heightAt(x+1,y)-heightAt(x-1,y))*32, -(heightAt(x,y+1)-heightAt(x,y-1))*32,1));
     for(int c=0;c<3;++c) normals[std::size_t(i+c)] = static_cast<unsigned char>((n[c]*.5F+.5F)*255);
   }
   albedo_=texture(colour); normal_=texture(normals);
@@ -262,6 +264,8 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
   glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDisable(GL_BLEND);
   shader_.use(); shader_.setMat4("uViewProjection",viewProjection_); shader_.setVec3("uEye",eye);
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);
+  shader_.setInt("uNormalCompare",options.normalCompare?1:0);
+  shader_.setFloat("uNormalStrength",options.normalStrength);shader_.setFloat("uSplitX",float(width)*.5F);
   shader_.setVec3("uFogColour",fog); shader_.setFloat("uFogDensity",fogDensity);
   // The camera may pass the map edge (see FollowCamera): cut away the boundary wall it is behind.
   const bool cutaway=!options.gallery&&!options.menu&&sceneGame_;
