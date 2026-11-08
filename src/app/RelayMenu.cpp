@@ -31,24 +31,39 @@ float drawTracked(ImDrawList* d,float size,ImVec2 p,ImU32 c,const char* t,float,
  auto* f=face?face:ImGui::GetFont();if(d)text(d,size,p,c,t);return f->CalcTextSizeA(size,1e6F,0,t).x;
 }
 int menuSelection(){return selected;} int settingsSelection(){return setting;}
+void drawLevelTransition(float black,float card,const char* kicker,const char* name){
+ auto* d=ImGui::GetForegroundDrawList();const auto size=ImGui::GetIO().DisplaySize;const float s=scale();
+ d->AddRectFilled({0,0},size,withAlpha(IM_COL32(3,8,15,255),black));
+ if(card<=0)return;
+ const float rise=(1-card)*10*s,y=size.y*.5F-40*s+rise;
+ const std::string number=kicker;
+ auto* f=face?face:ImGui::GetFont();
+ const float nw=f->CalcTextSizeA(22*s,1e6F,0,number.c_str()).x,tw=f->CalcTextSizeA(52*s,1e6F,0,name).x;
+ d->AddText(f,22*s,{(size.x-nw)*.5F,y},withAlpha(muted,card),number.c_str());
+ d->AddText(f,52*s,{(size.x-tw)*.5F,y+30*s},withAlpha(ink,card),name);
+ const float half=tw*.5F*std::min(1.F,card*1.3F);
+ d->AddLine({size.x*.5F-half,y+96*s},{size.x*.5F+half,y+96*s},withAlpha(accent,card),2*s);
+}
 MenuAction drawMenu(MenuMode mode,int& level,float,bool){
  const bool pause=mode==MenuMode::Pause;auto* d=ImGui::GetBackgroundDrawList();auto size=ImGui::GetIO().DisplaySize;float s=scale();
  if(mode!=lastMode){selected=0;lastMode=mode;}navigation(selected,4);
  const float x=size.x*.5F-290*s,top=size.y*.5F-235*s;
  center(d,top,58*s,ink,pause?"Paused":"Core Explorer Lite");
  center(d,top+78*s,26*s,muted,pause?"Game paused":"Collect cores and reach the exit");
- const std::string levelLabel=std::string("Level: ")+(level==0?"Tutorial Yard":"Obstacle Yard")+"   < >";
+ const char* levelNames[]{"Tutorial Yard","Obstacle Yard","Helios Yard"};
+ const std::string levelLabel=std::string("Level: ")+levelNames[std::clamp(level,0,2)]+"   < >";
  const char* labels[]{pause?"Resume":"Start game",pause?"Restart":levelLabel.c_str(),"Settings",pause?"Main menu":"Quit"};
  int activated=-1;auto mouse=ImGui::GetIO().MousePos;bool moved=std::abs(mouse.x-lastMouse.x)+std::abs(mouse.y-lastMouse.y)>.5F;lastMouse=mouse;
  for(int i=0;i<4;++i){ImVec2 a{x,top+(120+i*65)*s},b{x+580*s,a.y+54*s};
   if(moved&&mouse.x>=a.x&&mouse.x<=b.x&&mouse.y>=a.y&&mouse.y<=b.y)selected=i;
   if(button(d,a,b,labels[i],selected==i,s))activated=i;
  }
- if(!pause&&selected==1&&(ImGui::IsKeyPressed(ImGuiKey_LeftArrow)||ImGui::IsKeyPressed(ImGuiKey_RightArrow)||ImGui::IsKeyPressed(ImGuiKey_A)||ImGui::IsKeyPressed(ImGuiKey_D)))level=1-level;
+ if(!pause&&selected==1&&(ImGui::IsKeyPressed(ImGuiKey_LeftArrow)||ImGui::IsKeyPressed(ImGuiKey_A)))level=(level+2)%3;
+ if(!pause&&selected==1&&(ImGui::IsKeyPressed(ImGuiKey_RightArrow)||ImGui::IsKeyPressed(ImGuiKey_D)))level=(level+1)%3;
  if(enter())activated=selected;
  center(d,top+425*s,23*s,pause?ink:muted,"W / S or arrows to select   |   Enter to confirm");
  if(activated==0)return pause?MenuAction::Resume:MenuAction::Start;
- if(activated==1){if(pause)return MenuAction::Restart;level=1-level;}
+ if(activated==1){if(pause)return MenuAction::Restart;level=(level+1)%3;}
  if(activated==2){capture=-1;return MenuAction::Settings;}
  if(activated==3)return pause?MenuAction::Title:MenuAction::Quit;
  return MenuAction::None;

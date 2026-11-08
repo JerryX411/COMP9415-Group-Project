@@ -2,6 +2,7 @@
 #include <cmath>
 #include "graphics/RelayModels.h"
 #include <iostream>
+#include <string>
 #include <stdexcept>
 void check(bool ok,const char* msg){if(!ok)throw std::runtime_error(msg);}
 void advance(relay::Game& g,float seconds,relay::Input in={}){for(int i=0;i<int(seconds*120);++i){g.update(1.F/120,in);in.jumpPressed=in.crouchPressed=in.interactPressed=false;}}
@@ -94,5 +95,66 @@ int main(){try{
   g.reset(level);check(g.collectedCount()==0&&!g.gateUnlocked()&&g.gateOpen()==0&&g.state()==relay::RunState::Playing,"Restart clears progress");
  }
  g.reset(0);g.warpPlayer({14.8F,1,23});check(g.nearestCore()<0,"Core cannot be collected through low block");
+ // ---- Helios Yard (synced from the full edition's Level 1) ----
+ {
+  relay::Game y; y.reset(relay::Game::heliosLevel);
+  check(y.level()==relay::Game::heliosLevel&&std::string(y.levelName())=="HELIOS YARD","Helios Yard loads as level 3");
+  check(y.cores().size()==7&&y.doors().size()==17&&y.plates().size()==19&&y.traps().size()==48&&y.movers().size()==6&&y.portals().size()==1&&y.jumpPads().size()==1,"Helios Yard pieces");
+  check(y.timedLevel()&&y.timeRemaining()==600&&y.wordless(),"Helios Yard: 10-minute mission without HUD words");
+  check(y.gatePosition()==glm::vec3(46,1,6)&&y.room().max.x==88,"Helios Yard room and exit");
+  advance(y,.2F);check(y.player().grounded&&!y.playerIntersectsScene()&&y.player().health==5,"Helios spawn is clear");
+  // Materials and floor paint arrive in the voxel world.
+  int special=0;for(int z=4;z<88;++z)for(int x=4;x<88;++x)for(int h=0;h<12;++h){const auto m=y.world().cell(x,h,z);if(m>=4&&m<=8)++special;}
+  check(special>1000,"Guide, beacon, sandstone and slate materials load");
+  // Pressure plates unlock their doors for good, on the ground and on upper floors.
+  const auto plate=y.plates()[0];const auto& door=y.doors()[std::size_t(plate.door)];
+  check(!door.unlocked&&door.open==0,"Door starts sealed");
+  y.warpPlayer(plate.position);advance(y,.6F);
+  check(y.doors()[std::size_t(plate.door)].unlocked&&y.doors()[std::size_t(plate.door)].open>.99F,"Plate unlocks its door");
+  y.warpPlayer(y.spawnPoint());advance(y,30);check(y.doors()[std::size_t(plate.door)].open>.99F,"Door stays open for good");
+  int upper=-1;for(std::size_t i=0;i<y.plates().size();++i)if(y.plates()[i].position.y>1.5F)upper=int(i);
+  check(upper>=0,"An upper-floor plate exists");
+  const auto high=y.plates()[std::size_t(upper)];check(y.doors()[std::size_t(high.door)].centre.y>2.5F,"Its door is on an upper floor");
+  y.warpPlayer(high.position);advance(y,.6F);check(y.doors()[std::size_t(high.door)].unlocked,"Upper plate unlocks its upper door");
+  // Portals: wake both ends with E, then step in to cross.
+  relay::Input use;use.interactPressed=true;
+  const auto link=y.portals()[0];
+  y.warpPlayer(link.from+glm::vec3(1.1F,0,0));advance(y,.1F);check(y.availableInteraction()==relay::Interaction::Portal,"Portal end offers activation");
+  advance(y,.5F,use);check(y.portals()[0].fromOn&&!y.portals()[0].linked(),"First end wakes");
+  y.warpPlayer(link.to+glm::vec3(1.1F,0,0));advance(y,.1F);advance(y,.5F,use);check(y.portals()[0].linked(),"Both ends link");
+  advance(y,1.2F);y.warpPlayer(link.from);advance(y,.1F);
+  check(y.teleports()==1&&glm::distance(glm::vec2(y.player().position.x,y.player().position.z),glm::vec2(link.to.x,link.to.z))<.1F,"Stepping in crosses to the pair");
+  advance(y,.5F);check(y.teleports()==1,"Arrival end waits until stepped off");
+  // Restart seals the doors and puts the portals to sleep again.
+  y.reset(relay::Game::heliosLevel);check(!y.doors()[0].unlocked&&!y.portals()[0].fromOn&&y.teleports()==0,"Restart resets Helios Yard");
+  // Electric floor plates hurt only feet on the plate.
+  relay::Game t;t.reset(relay::Game::heliosLevel);
+  const auto& trap=t.traps()[0];std::size_t ti=0;
+  while(t.trapPhase(ti)!=relay::TrapPhase::Active)advance(t,.05F);
+  t.warpPlayer({trap.area.min.x+.5F,1,trap.area.min.z+.5F});t.update(.01F,{});check(t.player().health==4,"Live shock plate hurts");
+ }
+ // Shift sprint is faster than a run, and crouching cancels it.
+ {
+  relay::Game a,b;a.reset(0);b.reset(0);relay::Input run;run.movement={0,1};relay::Input dash=run;dash.sprintHeld=true;
+  const auto a0=a.player().position,b0=b.player().position;advance(a,.4F,run);advance(b,.4F,dash);
+  check(glm::distance(b0,b.player().position)>glm::distance(a0,a.player().position)*1.35F&&b.player().sprinting,"Shift sprint is faster");
+  relay::Input crouchDash=dash;crouchDash.crouchHeld=true;advance(b,.1F,crouchDash);check(!b.player().sprinting,"Crouch stops the sprint");
+ }
+ // Ground dust: footfalls while running, a puff at take-off, a ring on landing; all of it settles.
+ {
+  const auto dust=[](const relay::Game& g){int n=0;for(const auto& p:g.particles())if(p.remaining>0&&p.kind==relay::ParticleKind::Dust)++n;return n;};
+  relay::Game d;d.reset(0);relay::Input run;run.movement={0,1};
+  int most=0;for(int i=0;i<60;++i){d.update(1.F/120,run);most=std::max(most,dust(d));}
+  check(most>0,"Running kicks up dust at the feet");
+  for(const auto& p:d.particles())if(p.remaining>0&&p.kind==relay::ParticleKind::Dust)check(p.position.y>1.02F&&p.position.y<1.6F,"Dust stays low above the floor");
+  advance(d,1);check(dust(d)==0,"Step dust settles");
+  d.reset(0);advance(d,.2F);relay::Input hop;hop.jumpPressed=hop.jumpHeld=true;d.update(1.F/120,hop);
+  check(dust(d)>=5,"Take-off puff");
+  advance(d,1);d.warpPlayer({8,4,25});advance(d,.05F);const int before=dust(d);
+  bool landed=false;int ring=0;for(int i=0;i<120&&!landed;++i){d.update(1.F/120,{});if(d.player().grounded){landed=true;ring=dust(d);}}
+  check(landed&&ring>=before+8,"Landing ring of dust");
+  advance(d,1);check(dust(d)==0,"Landing dust settles");
+  d.reset(0);advance(d,2);check(dust(d)==0,"Standing still makes no dust");
+ }
  std::cout<<"Lite: movement, jump/land, toggle/headroom/tunnel, interaction, spike timing/height/cooldown, moving collision and reset passed.\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;} }

@@ -6,6 +6,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "core/CourierMotion.h"
+#include "core/LevelData.h"
 
 
 namespace relay {
@@ -17,7 +18,8 @@ struct Bounds {
 
 class VoxelWorld {
  public:
-  static constexpr int size = 64;
+  // 96 across: room for the 84 x 84 Helios Yard (the original yards use the north-west corner).
+  static constexpr int size = 96;
   std::uint8_t cell(int x, int y, int z) const;
   void set(int x, int y, int z, std::uint8_t material);
   void fill(int x0, int y0, int z0, int x1, int y1, int z1,
@@ -144,7 +146,8 @@ inline float crimsonFlicker(float time, float seed) {
   else if (jitter > .93F) k = 1.F;                          // a pop
   return k;
 }
-// Floor button: standing on it opens its door, which stays open for doorHold seconds after stepping off.
+// Floor button: stepping on it unlocks its door for good (as in the full edition). Plates and doors
+// may stand on an upper floor.
 struct PressurePlate {
   glm::vec3 position{};
   int door = 0;
@@ -156,6 +159,7 @@ struct BlastDoor {
   glm::vec3 centre{}, half{};  // Closed panel volume.
   bool alongZ = false;         // The door spans z (else x).
   float open = 0, hold = 0;    // 0 sealed .. 1 open; seconds left before it closes.
+  bool unlocked = false;       // Its plate was pressed: it stays open from then on.
   Bounds bounds() const { return {centre - half, centre + half}; }
   std::array<Bounds, 2> panels() const;
 };
@@ -163,7 +167,7 @@ struct FloorTrap {
   Bounds area{};
   float cycleOffset = 0.0F;
   float disabledFor = 0.0F;
-  static constexpr float tileWidth = .92F, surfaceHeight = .70F;
+  static constexpr float tileWidth = .92F, surfaceHeight = .1075F;
   Bounds tileBounds(float x, float z) const;
   bool touchesFeet(glm::vec3 feet, float radius) const;
 };
@@ -202,26 +206,34 @@ struct Particle {
 };
 
 
-// Reduced simulation: basic locomotion, switches and two hazards only.
+// Reduced simulation: basic locomotion, switches and hazards. Level 2 (Helios Yard) is read from
+// assets/levels/helios_yard.txt and adds what that map needs from the full edition: Shift sprint,
+// pressure plates with blast doors, and portals.
 class Game {
  public:
  static constexpr float playerRadius=.70F, playerHeight=1.70F, modelScale=.8F;
  static constexpr float crouchHeight=.95F,crouchSpeed=2.6F,speed=5.2F;
  static constexpr float gravity=26,fallGravity=36,jumpSpeed=9.6F,footRadius=.30F;
  static constexpr float coyoteDuration=.10F,jumpBufferDuration=.12F;
- // Retained pose calibration constants; no sprint or pad gameplay in this edition.
+ // Shift sprint (from the full edition); padSpeed only calibrates poses here.
  static constexpr float sprintSpeed=8.4F,padSpeed=14;
+ static constexpr int levelCount=3,heliosLevel=2;
+ static constexpr float doorHold=4.F,plateRadius=.75F,portalRadius=.7F,portalCooldown=1.F;
  static constexpr bool missionsUnlocked=true;
  Game(); void reset(int level); void update(float seconds,const Input& input);
+ // Loads a level file (Helios Yard) into the current level slot.
+ void applyLevel(const LevelData& data);
+ // Standing height on top of whatever is built at (x, z), from the floor up.
+ float surfaceAt(float x,float z) const;
  Bounds playerBounds() const;
  bool collidesWithScene(const Bounds& box) const{return blocked(box);}
  bool playerIntersectsScene() const{return blockedPlayer(player_.position);}
  TrapPhase trapPhase(std::size_t index) const; float trapPhaseRemaining(std::size_t index) const;
  int nearestCore() const;
- glm::vec3 gatePosition() const{return {32,1,7};}
+ glm::vec3 gatePosition() const{return gate_;}
  float gateOpen() const{return gateOpen_;}
  const char* tutorialHint() const;
- int nearestSwitch() const; Interaction availableInteraction() const;
+ int nearestSwitch() const; int nearestPortal() const; glm::vec3 portalEnd(int code) const; Interaction availableInteraction() const;
  float shadowHeight() const; const char* levelName() const{return nameOf(level_);} static const char* nameOf(int level);
  float bodyHeight() const{return player_.crouching?crouchHeight:playerHeight;}
  const VoxelWorld& world() const{return world_;} const Player& player() const{return player_;}
@@ -234,6 +246,9 @@ class Game {
  const std::array<Particle,128>& particles() const{return particles_;}
  static constexpr float challengeTimeLimit=120.F;
  bool timedLevel() const{return level_!=0;}
+ float timeLimit() const{return timeLimit_;}
+ // Helios Yard plays as a full-edition mission: no words in the HUD, a door glyph marks the exit.
+ bool wordless() const{return level_==heliosLevel;}
  float timeRemaining() const{return remaining_;}
  bool timedOut() const{return timedLevel()&&remaining_<=0&&state_==RunState::Lost;}
  float elapsed() const{return elapsed_;} Bounds room() const{return room_;} glm::vec3 spawnPoint() const{return spawn_;}
@@ -243,6 +258,7 @@ class Game {
  const std::vector<Core>& cores() const{return cores_;} const std::vector<Checkpoint>& checkpoints() const{return checkpoints_;}
  const std::vector<PortalLink>& portals() const{return portals_;} const std::vector<Pickup>& pickups() const{return pickups_;}
  const std::vector<SpeedPad>& speedPads() const{return pads_;} const std::vector<BlastDoor>& doors() const{return doors_;}
+ const std::vector<PressurePlate>& plates() const{return plates_;} int teleports() const{return teleports_;}
  int collectedCount() const; int liveParticleCount() const; bool gateUnlocked() const; float boostMeter() const;
  bool jetting() const{return false;}
  private:
@@ -252,11 +268,15 @@ class Game {
  void updateAnimation(float dt,glm::vec3 previous,float turn);
  void updateMovers(float dt); bool separateFromMover(std::size_t index);
  void updateInteraction(float dt,bool pressed);
+ void updateDoors(float dt); void updatePortals(float dt); void activatePortal(int code);
+ void buildYard(); void emitBurst(glm::vec3 at,glm::vec3 colour,int count);
  void applyDamage(glm::vec3 source,int sourceId,bool launch=true,DamageKind kind=DamageKind::Blunt);
  VoxelWorld world_; Player player_; RunState state_=RunState::Playing;
  int level_=0,revision_=0,wallHeight_=3,interactionIndex_=-1;
  bool crouchToggle_=false,interactionCommitted_=false;
- Bounds room_{{4,1,4},{36,4,36}}; glm::vec3 spawn_{8,1,25};
+ Bounds room_{{4,1,4},{36,4,36}}; glm::vec3 spawn_{8,1,25},gate_{32,1,7};
+ float timeLimit_=challengeTimeLimit,portalWait_=0; int portalHold_=-1,teleports_=0;
+ std::vector<PressurePlate> plates_;
  float elapsed_=0,remaining_=0,gateOpen_=0,hitStop_=0,messageTime_=0;
  std::string message_;
  std::vector<FloorTrap> traps_; std::vector<RelaySwitch> switches_; std::vector<MovingHazard> movers_;
@@ -267,6 +287,9 @@ class Game {
  void emitImpact(glm::vec3 direction);
  void emitCoreSparks(glm::vec3 position);
  void emitLiftParticles(glm::vec3 position,bool trail);
+ // Ground dust: soft grey puffs kicked up around a point (footfalls, take-offs, landings).
+ void emitDust(glm::vec3 at,int count,float radius,float outward,float rise,float size);
+ int footStep_=0;  // Footfall counter (half walk cycles) for step dust.
  float liftTrail_=0,liftTick_=0;
  void updateParticles(float dt);
 };

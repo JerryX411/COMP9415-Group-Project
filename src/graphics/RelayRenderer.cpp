@@ -110,7 +110,8 @@ std::vector<Vertex> roundPrimitive(bool cylinder,int slices=24,int stacks=14) {
 }
 
 Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), craft::core::assetPath("shaders/relay.frag")),
-    skybox_(craft::core::assetPath("textures/skybox/cross.jpg")) {
+    sky_(craft::core::assetPath("shaders/sky.vert"), craft::core::assetPath("shaders/sky.frag")) {
+  glGenVertexArrays(1,&skyVao_);
   glGenVertexArrays(1,&cubeVao_); glGenVertexArrays(1,&terrainVao_);
   glGenBuffers(1,&cubeBuffer_); glGenBuffers(1,&instanceBuffer_);
   glGenBuffers(1,&terrainBuffer_); glGenBuffers(1,&terrainInstance_);
@@ -161,7 +162,7 @@ Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), cra
   instances_.reserve(1024);
 }
 Renderer::~Renderer() {
-  glDeleteVertexArrays(1,&cubeVao_); glDeleteVertexArrays(1,&terrainVao_);
+  glDeleteVertexArrays(1,&cubeVao_); glDeleteVertexArrays(1,&terrainVao_); glDeleteVertexArrays(1,&skyVao_);
   for (unsigned b : {cubeBuffer_,instanceBuffer_,terrainBuffer_,terrainInstance_}) glDeleteBuffers(1,&b);
   glDeleteTextures(1,&albedo_); glDeleteTextures(1,&normal_);
 }
@@ -175,20 +176,30 @@ void Renderer::rebuildTerrain(const Game& game, bool optimised, bool whitebox) {
     glm::vec3 colour = y==0 ? glm::vec3(.65F,.71F,.72F) : glm::vec3(.83F,.86F,.85F);
     if (!whitebox) colour = y==0 ? glm::vec3(.36F,.39F,.40F) : glm::vec3(.84F,.83F,.78F);
     if (material==3) colour = whitebox ? glm::vec3(.72F,.73F,.64F) : glm::vec3(.63F,.65F,.63F);
+    // Guidance and district materials from the full edition (LevelData::Guide..Slate), on walls or
+    // painted on the floor. The fraction of the surface index is a faint self-glow, so guide trim
+    // and beacons still read in shadow.
+    float surface=y==0?2.F:y==1?4.F:1.F,glow=0;
+    const bool special=material>=4&&material<=8;
+    if(material==4){colour={.90F,.70F,.46F};surface=5;glow=.12F;}       // soft amber guide trim
+    if(material==5){colour={.34F,.84F,.98F};surface=5;glow=.45F;}       // cyan beacon
+    if(material==6){colour={.46F,.58F,.60F};surface=5;glow=.04F;}       // faint shortcut mark
+    if(material==7){colour={.88F,.77F,.60F};surface=1;}                  // sandstone
+    if(material==8){colour={.42F,.47F,.54F};surface=3;}                  // slate
     for(auto n: directions) {
       const bool exposed = world.cell(x+n.x,y+n.y,z+n.z)==0;
       if(exposed) ++stats_.visibleFaces;
       if(!optimised || exposed) {
         auto c=colour;
-        if(!whitebox) {
+        if(!whitebox&&!special) {
           if(y==0) c={.25F,.30F,.34F};
           if(y==0&&(x==7||x==32))c={.38F,.48F,.51F};
           if(y>0&&y==1&&material==2) c={.18F,.21F,.23F};
           if(y>1&&material==2&&(x%8==0||z%8==0)) c={.43F,.48F,.50F};
         }
+        if(special&&(material==7||material==8)&&y>0&&(x%7==0||z%7==0)) c*=.88F;
         face(vertices,glm::vec3(x+.5F,y+.5F,z+.5F),glm::vec3(n),c);
-        const float surface=y==0?2.F:y==1?4.F:1.F;
-        for(std::size_t v=vertices.size()-6;v<vertices.size();++v)vertices[v].surface=surface;
+        for(std::size_t v=vertices.size()-6;v<vertices.size();++v)vertices[v].surface=surface+glow;
       }
     }
   }
@@ -207,7 +218,6 @@ void Renderer::prepare(const Game& game, const RenderOptions& options, float gal
   else if(options.gallery) models_.append(game,instances_);
   else models_.append(game,instances_,options.wakeTime);
   playerPosition_=game.player().position;
-  lightCount_=0; if(!options.menu&&!options.gallery) gatherLights(game);
   const auto group=[](const Instance& i) { return int(i.blend)*primitives+int(i.primitive); };
   std::stable_sort(instances_.begin(),instances_.end(),[&](const auto& a,const auto& b) { return group(a)<group(b); });
   instanceCount_.fill(0); for(const auto& i:instances_) ++instanceCount_[std::size_t(group(i))];
@@ -217,25 +227,34 @@ void Renderer::prepare(const Game& game, const RenderOptions& options, float gal
   stats_.instances=int(instances_.size());
   stats_.submittedTriangles=options.gallery||options.menu?0:terrainVertices_/3;
   stats_.drawCalls=options.gallery||options.menu?0:1;
-  // The skybox submits one fullscreen triangle and one draw call.
-  ++stats_.submittedTriangles; ++stats_.drawCalls;
+  // The star sky is one fullscreen triangle and one draw call.
+  if(!options.gallery&&!options.menu) { ++stats_.submittedTriangles; ++stats_.drawCalls; }
   for(int i=0;i<groups;++i) if(instanceCount_[i]) { stats_.submittedTriangles+=instanceCount_[i]*meshCount_[i%primitives]/3; ++stats_.drawCalls; }
+}
+void Renderer::drawSky(const glm::mat4& viewProjection, bool screenSpace, float aspect, float time) {
+  glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
+  sky_.use();
+  sky_.setMat4("uInverseViewProjection",glm::inverse(viewProjection));
+  sky_.setInt("uScreenSpace",screenSpace?1:0); sky_.setFloat("uAspect",aspect); sky_.setFloat("uTime",time);
+  glBindVertexArray(skyVao_); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
+  glDepthMask(GL_TRUE); glEnable(GL_DEPTH_TEST);
 }
 void Renderer::drawMenuBackground(int width, int height, float time) {
   if (width <= 0 || height <= 0) return;
   glViewport(0, 0, width, height);
-  glClearColor(0, 0, 0, 1);
+  glClearColor(.025F,.04F,.065F,1);
   glDepthMask(GL_TRUE);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  const float yaw = time * .008F;
-  const auto projection = glm::perspective(glm::radians(65.F), float(width) / height, .1F, 100.F);
-  const auto view = glm::lookAt(glm::vec3(0), glm::vec3(std::sin(yaw), .15F, -std::cos(yaw)), glm::vec3(0,1,0));
-  skybox_.draw(projection * view);
+  // The title screen looks out at the night sky, turning very slowly.
+  const float aspect=float(width)/float(height),yaw=time*.012F;
+  const auto projection=glm::perspective(glm::radians(60.F),aspect,.1F,100.F);
+  const auto view=glm::lookAt(glm::vec3(0),glm::vec3(std::sin(yaw),.28F,-std::cos(yaw)),glm::vec3(0,1,0));
+  drawSky(projection*view,false,aspect,time);
 }
 void Renderer::draw(int width, int height, const RenderOptions& options, const FollowCamera& camera) {
   const float aspect=float(width)/float(height);
   glm::vec3 eye=camera.eye();
-  glm::vec3 fog(.28F,.34F,.38F); float fogDensity=.006F;
+  glm::vec3 fog(.07F,.10F,.16F); float fogDensity=.002F;
   if(options.customView) {
     eye=options.viewEye;
     viewProjection_=glm::perspective(glm::radians(50.F),aspect,.1F,300.F)*glm::lookAt(eye,options.viewTarget,{0,1,0});
@@ -276,12 +295,12 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
     }
     viewProjection_=glm::perspective(glm::radians(58.F),aspect,.06F,100.F)*glm::lookAt(eye,target,{0,1,0});
   } else {
-    viewProjection_=glm::perspective(glm::radians(camera.fov()),aspect,.06F,100.F)*glm::lookAt(eye,camera.target(),camera.up());
+    viewProjection_=glm::perspective(glm::radians(camera.fov()),aspect,.06F,180.F)*glm::lookAt(eye,camera.target(),camera.up());
   }
   glViewport(0,0,width,height);
-  if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.22F,.27F,.30F,1);
+  if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.025F,.04F,.065F,1);
   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-  skybox_.draw(viewProjection_);
+  if(!options.menu&&!options.gallery) drawSky(viewProjection_,options.overview&&!options.customView,aspect,menuTime_);
   glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDisable(GL_BLEND);
   shader_.use(); shader_.setMat4("uViewProjection",viewProjection_); shader_.setVec3("uEye",eye);
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);
@@ -292,11 +311,6 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
   const bool cutaway=!options.gallery&&!options.menu&&sceneGame_;
   shader_.setInt("uCutaway",cutaway?1:0);
   if(cutaway) { const Bounds room=sceneGame_->room(); shader_.setVec4("uRoom",glm::vec4(room.min.x,room.min.z,room.max.x,room.max.z)); }
-  shader_.setInt("uLightCount",lightCount_);
-  for(int i=0;i<lightCount_;++i) {
-    const std::string index="["+std::to_string(i)+"]";
-    shader_.setVec4("uLightPosition"+index,lightPosition_[std::size_t(i)]); shader_.setVec4("uLightColour"+index,lightColour_[std::size_t(i)]);
-  }
   glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D_ARRAY,albedo_);
   glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D_ARRAY,normal_);
   if(!options.gallery&&!options.menu) { glBindVertexArray(terrainVao_); glDrawArraysInstanced(GL_TRIANGLES,0,terrainVertices_,1); }
@@ -310,12 +324,22 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
   glDepthMask(GL_TRUE); glDisable(GL_BLEND);
   glBindVertexArray(0); glActiveTexture(GL_TEXTURE0);
 }
-void Renderer::gatherLights(const Game& game) {
-  // Candidate lights carry (position, radius) and (colour, intensity); the strongest are kept.
-  struct Light { glm::vec4 position, colour; float weight; };
-  std::vector<Light> lights;
-  const auto add=[&](glm::vec3 p,float radius,glm::vec3 colour,float intensity) { if(intensity>.03F) lights.push_back({{p,radius},{colour,intensity},intensity*radius}); };
-  for(std::size_t i=0;i<game.traps().size();++i) if(game.trapPhase(i)==TrapPhase::Warning)
-    add((game.traps()[i].area.min+game.traps()[i].area.max)*.5F,2.F,{1,.6F,.15F},.3F);
+glm::vec3 Renderer::projectToEdge(glm::vec3 point,float width,float height,float margin,float top) const {
+  // Screen position of a world point, pinned inside the margins when it is off screen or behind
+  // the camera; z is 1 when the point is on screen.
+  const auto p=viewProjection_*glm::vec4(point,1);
+  const bool behind=p.w<=1e-4F;
+  glm::vec2 ndc=glm::vec2(p.x,p.y)/std::max(std::abs(p.w),1e-4F);
+  if(behind) ndc=-ndc*1000.F;
+  glm::vec2 screen((ndc.x*.5F+.5F)*width,(.5F-ndc.y*.5F)*height);
+  const glm::vec2 lo(margin,top),hi(width-margin,height-margin);
+  const bool inside=!behind&&screen.x>=lo.x&&screen.x<=hi.x&&screen.y>=lo.y&&screen.y<=hi.y;
+  if(!inside) {
+    const glm::vec2 c=(lo+hi)*.5F; glm::vec2 d=screen-c;
+    if(glm::length(d)<1.F) d={0,1};
+    const float sx=std::abs(d.x)>1e-6F?((d.x>0?hi.x:lo.x)-c.x)/d.x:1e9F,sy=std::abs(d.y)>1e-6F?((d.y>0?hi.y:lo.y)-c.y)/d.y:1e9F;
+    screen=c+d*std::min(sx,sy);
+  }
+  return {screen,inside?1.F:0.F};
 }
 } // namespace relay

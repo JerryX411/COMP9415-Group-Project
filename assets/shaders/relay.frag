@@ -14,20 +14,7 @@ uniform float uFogDensity;
 // courier (who never comes within 0.3 of a wall). The floor stays.
 uniform bool uCutaway;
 uniform vec4 uRoom;
-// Effect lights: xyz position + radius, rgb colour + intensity.
-uniform int uLightCount;
-uniform vec4 uLightPosition[12], uLightColour[12];
 out vec4 fragColour;
-vec3 effectLight(vec3 n) {
-  vec3 sum=vec3(0.0);
-  for(int i=0;i<uLightCount;++i) {
-    vec3 d=uLightPosition[i].xyz-vPosition;
-    float distance=length(d);
-    float falloff=clamp(1.0-distance/uLightPosition[i].w,0.0,1.0);
-    sum+=uLightColour[i].rgb*uLightColour[i].a*falloff*falloff*(.3+.7*max(dot(n,d/max(distance,.001)),0.0));
-  }
-  return sum;
-}
 void main() {
   if(uCutaway&&vPosition.y>1.001) {
     const float edge=.06;
@@ -36,7 +23,7 @@ void main() {
   }
   vec3 n=normalize(vNormal);
   vec3 view=normalize(uEye-vPosition);
-  vec3 light=normalize(vec3(-.45,1.0,.35));
+  vec3 light=normalize(vec3(-.65,.75,-.35));
   float fog=1.0-exp(-length(uEye-vPosition)*uFogDensity);
   // Emission above 1 is unlit glow: particles, beams and halos. A positive
   // material.z shades smoke and dust as volumes instead.
@@ -45,7 +32,7 @@ void main() {
     // material.x > 0 fades the edges (soft blobs); < 0 fades the centre (shells).
     float soft=vMaterial.x>=0.0?mix(1.0,facing*facing,vMaterial.x):mix(1.0,pow(1.0-facing,2.0),-vMaterial.x);
     vec3 glow=vColour*(vMaterial.y-1.0);
-    if(vMaterial.z>0.0) glow=glow*mix(1.0,.5+.45*max(dot(n,light),0.0)+.2*n.y,vMaterial.z)+vColour*effectLight(n)*.7*vMaterial.z;
+    if(vMaterial.z>0.0) glow=glow*mix(1.0,.5+.45*max(dot(n,light),0.0)+.2*n.y,vMaterial.z);
     fragColour=vec4(mix(glow,uFogColour,fog*.6),vAlpha*soft);
     return;
   }
@@ -66,6 +53,8 @@ void main() {
     }
   }
   int surface=int(clamp(vSurface,1.0,5.0))-1;
+  // Terrain: the fraction of the surface index is a faint self-glow (guide trim, beacons).
+  float selfGlow=fract(vSurface);
   vec3 materialUv=vec3(vUv,float(surface));
   // Ceramic, tread steel, brushed alloy, rubber, painted casing.
   float gloss=surface==0?80.0:surface==1?24.0:surface==2?110.0:surface==3?8.0:48.0;
@@ -82,11 +71,10 @@ void main() {
   float diffuse=max(dot(n,light),0.0);
   float specular=pow(max(dot(n,normalize(light+view)),0.0),gloss);
   float sky=.5+.5*n.y;
-  vec3 ambient=mix(vec3(.20,.22,.24),vec3(.48,.52,.56),sky);
-  float rim=pow(1.0-max(dot(n,view),0.0),3.0)*.13*vMaterial.x;
-  float fill=max(dot(n,normalize(vec3(.6,.4,-.8))),0.0)*.24;
-  vec3 colour=albedo*(ambient+.66*diffuse+fill)+vec3(.85,.93,1.0)*(specular*reflectance+rim*.35)+albedo*vMaterial.y;
-  colour+=albedo*effectLight(n);
+  vec3 ambient=mix(vec3(.16,.18,.23),vec3(.34,.39,.47),sky);
+  // Required ambient + Lambert diffuse + Blinn-Phong specular, in world space.
+  vec3 colour=albedo*(ambient+vec3(1.0,.90,.78)*.85*diffuse)
+             +vec3(1,.94,.86)*specular*reflectance+albedo*(vMaterial.y+selfGlow);
   colour=mix(colour,uFogColour,fog);
   fragColour=vec4(colour,vAlpha);
 }

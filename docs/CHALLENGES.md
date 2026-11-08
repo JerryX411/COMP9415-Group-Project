@@ -6,7 +6,7 @@ The two selected challenges are **Normal Mapping** and **Particles**. Hierarchic
 
 Start a level; use F1 to reveal diagnostics (hidden by default). F2 enables/disables normal mapping; F3 splits the same frame at its physical framebuffer midpoint (left OFF, right ON); F4 freezes simulation including timer, hazards and particles; F5 cycles normal strength through 0, 0.5, 1, 1.5, 2; F6 enables/disables hidden-face removal. Mouse orbit/zoom still works during frozen inspection. Pause/settings also stop simulation. Return F4 to OFF to resume gameplay.
 
-Normal mapping adds no vertices. Verify identical triangle counts when switching F2. Inspect the floor, walls and rotated/scaled robot parts. Strength zero uses the same shading path as OFF. The comparison affects mapped surfaces, not the skybox or emissive particles.
+Normal mapping adds no vertices. Verify identical triangle counts when switching F2. Inspect the floor, walls and rotated/scaled robot parts. Strength zero uses the same shading path as OFF. The comparison affects mapped surfaces, not the background or emissive particles.
 
 ## Normal mapping implementation
 
@@ -45,9 +45,9 @@ CoreExplorerLite.exe --benchmark --level 0 --benchmark-output level0.csv
 CoreExplorerLite.exe --benchmark --level 1 --benchmark-output level1.csv
 ```
 
-Build Release before measuring. The tool requires and verifies a 1920x1080 framebuffer, disables VSync, freezes each level after 24 simulation steps of 1/120 seconds on its jump pad (including its active particles), fixes eye=(20,17,38), target=(20,1,19), vertical FOV=50 degrees, near=0.1, far=300, normal mapping ON at strength 1, skybox ON. Only hidden-face removal differs between baseline and optimised. Both modes keep the same instancing; it is not claimed as an extra challenge.
+Build Release before measuring. The tool requires and verifies a 1920x1080 framebuffer, disables VSync, freezes each level after 24 simulation steps of 1/120 seconds on its jump pad (including its active particles), fixes eye=(20,17,38), target=(20,1,19), vertical FOV=50 degrees, near=0.1, far=300, normal mapping ON at strength 1, static dark-blue background (no skybox). Only hidden-face removal differs between baseline and optimised. Both modes keep the same instancing; it is not claimed as an extra challenge.
 
-Each row has 60 unmeasured warm-up scene frames and exactly 240 measured frames. Three trials alternate order. CPU wall time brackets the complete scene draw with glFinish synchronization. Loading, mesh construction, static instance upload, gameplay, UI, screenshots and buffer swapping are excluded. All scene geometry, skybox and frozen particle draws are included. This measures synchronized scene-render time, not gameplay FPS, CPU update cost or a pure GPU timer query.
+Each row has 60 unmeasured warm-up scene frames and exactly 240 measured frames. Three trials alternate order. CPU wall time brackets the complete scene draw with glFinish synchronization. Loading, mesh construction, static instance upload, gameplay, UI, screenshots and buffer swapping are excluded. All scene geometry and frozen particle draws are included. This measures synchronized scene-render time, not gameplay FPS, CPU update cost or a pure GPU timer query.
 
 CSV rows contain mean ms/frame, submitted triangles, draw calls, solid voxels, exposed faces and live particles. The header records GPU/driver and frozen conditions. Two PNGs next to the CSV capture the first baseline and optimised result for image comparison. Resizing/cancelling produces an error; do not use incomplete CSVs. Output parent directories must exist. Run on the intended assessment hardware too; local Windows numbers are not VLAB validation.
 

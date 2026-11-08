@@ -240,6 +240,191 @@ SceneModels::SceneModels() {
 
 
 
+// ---- Ported from the full edition: core, plate, door and portal models ----
+void SceneModels::appendCore(glm::vec3 position, float time, std::vector<Instance>& out, float floorHeight) {
+  position.y += std::sin(time * 2.4F) * .12F;
+  const float angle = time * 1.4F;
+  appendBox(out, position, {.36F, .46F, .36F}, mint, .4F, 1, angle); out.back().primitive=Primitive::Sphere;
+  // Breathing halo, a faint column of light and motes spiralling up out of the core.
+  const float pulse = .5F + .5F * std::sin(time * 3.1F);
+  for (int i = 0; i < 7; ++i) {
+    const float rise = std::fmod(time * .45F + float(i) / 7.F, 1.F), a = time * 1.6F + float(i) * 2.4F;
+    const glm::vec3 mote = glm::vec3(position.x, floorHeight, position.z) + glm::vec3(std::cos(a) * (.45F - .25F * rise), .1F + 2.1F * rise, std::sin(a) * (.45F - .25F * rise));
+    appendGlow(out, mote, glm::vec3(.045F), {.45F, 1, .9F}, std::sin(rise * 3.14159F) * .9F, 1.4F);
+  }
+  appendGlow(out, position, glm::vec3(.95F + .12F * pulse), {.30F, .95F, .85F}, .30F + .12F * pulse, .9F);
+  out.push_back({glm::scale(glm::translate(glm::mat4(1), {position.x, floorHeight + 1.3F, position.z}), {.55F, 2.6F, .55F}), glm::vec4(.35F, .95F, .9F, .10F + .04F * pulse), {1, 1.8F, 0, 1}, Primitive::Cylinder, Blend::Additive});
+  for(float side:{-1.F,1.F}) { appendBox(out,position+glm::vec3(side*.19F,0,0),{.10F,.36F,.40F},shell,0,1,angle); out.back().primitive=Primitive::Sphere; }
+  appendBox(out, position + glm::vec3(0, .29F, 0), {.48F, .10F, .48F}, shell, 0, 1, angle);
+  appendBox(out, position - glm::vec3(0, .29F, 0), {.48F, .10F, .48F}, shell, 0, 1, angle);
+  appendBox(out, {position.x, floorHeight, position.z}, {.8F, .035F, .8F}, teal, .12F, 1, .785F);
+}
+void SceneModels::appendPlate(const PressurePlate& plate, float doorHold, float time, std::vector<Instance>& out) {
+  // Floor button: a dark ring and a white cap that sinks when pressed. Amber while its door is
+  // sealed, cyan (every ring lamp lit) once it has unlocked the door.
+  const glm::vec3 p = plate.position;
+  const bool live = doorHold > 0;
+  const glm::vec3 lamp = live ? glm::vec3(.35F, 1, .9F) : glm::vec3(1, .6F, .15F);
+  appendBox(out, p + glm::vec3(0, .02F, 0), {1.5F, .04F, 1.5F}, dark, 0, 1); out.back().primitive = Primitive::Cylinder;
+  appendBox(out, p + glm::vec3(0, .05F - .03F * plate.press, 0), {1.08F, .05F, 1.08F}, shell, 0, 1); out.back().primitive = Primitive::Cylinder;
+  appendBox(out, p + glm::vec3(0, .078F - .03F * plate.press, 0), {.46F, .01F, .46F}, lamp, live ? .9F : .35F + .25F * std::sin(time * 3.F), 1); out.back().primitive = Primitive::Cylinder;
+  for (int i = 0; i < 12; ++i) {
+    const float a = float(i) * 6.2831853F / 12;
+    const bool on = live ? float(i) / 12 < doorHold / Game::doorHold : (int(time * 4.F) % 12) == i;
+    appendBox(out, p + glm::vec3(std::sin(a) * .64F, .045F, std::cos(a) * .64F), {.06F, .02F, .13F}, on ? lamp : glm::vec3(.16F, .18F, .19F), on ? .85F : 0, 1, a);
+  }
+  appendGlow(out, p + glm::vec3(0, .15F, 0), glm::vec3(.62F, .1F, .62F), lamp, live ? .3F : .12F, 1.1F);
+}
+
+void SceneModels::appendDoor(const BlastDoor& door, float time, std::vector<Instance>& out) {
+  // Split blast door: white panels with a teal band and a dark seam edge; a status strip on
+  // each jamb (red sealed, cyan open) and countdown lamps along the top while it is held.
+  const int axis = door.alongZ ? 2 : 0, normal = door.alongZ ? 0 : 2;
+  glm::vec3 along(0); along[axis] = 1;
+  const bool open = door.hold > 0 || door.open > .02F;
+  const glm::vec3 status = open ? glm::vec3(.35F, 1, .9F) : glm::vec3(1, .25F, .15F);
+  for (const auto& panel : door.panels()) {
+    const glm::vec3 c = (panel.min + panel.max) * .5F, s = panel.max - panel.min;
+    appendBox(out, c, s - glm::vec3(.01F), shell, 0, 1);
+    glm::vec3 band = s; band.y = .12F; band[normal] += .03F; band[axis] -= .1F;
+    appendBox(out, c + glm::vec3(0, .25F, 0), band, teal, .15F, 1);
+    glm::vec3 seam = s; seam[axis] = .06F; seam[normal] += .02F; seam.y -= .1F;
+    const float edge = c[axis] < door.centre[axis] ? panel.max[axis] - .03F : panel.min[axis] + .03F;
+    glm::vec3 at = c; at[axis] = edge;
+    appendBox(out, at, seam, dark, 0, 1);
+  }
+  for (float side : {-1.F, 1.F}) {
+    glm::vec3 jamb = door.centre + along * (side * (door.half[axis] + .06F));
+    glm::vec3 size(.14F, door.half.y * 2, .14F); size[normal] = 1.06F;
+    appendBox(out, jamb, size, dark, 0, 1);
+    glm::vec3 strip(.05F, door.half.y * 1.6F, .05F); strip[normal] = 1.08F;
+    appendBox(out, jamb, strip, status, open ? .9F : .45F + .3F * std::sin(time * 5.F), 1);
+  }
+  const float held = std::clamp(door.hold / Game::doorHold, 0.F, 1.F);
+  for (int i = 0; i < 8; ++i) {
+    const float t = (float(i) + .5F) / 8.F;
+    glm::vec3 lamp = door.centre + glm::vec3(0, door.half.y + .02F, 0) + along * ((t - .5F) * door.half[axis] * 2);
+    glm::vec3 size(.16F, .04F, .16F); size[normal] = .3F;
+    const bool on = open && t < held;
+    appendBox(out, lamp, size, on ? glm::vec3(.35F, 1, .9F) : glm::vec3(.16F, .18F, .19F), on ? .9F : 0, 1);
+  }
+}
+
+void SceneModels::appendPortal(const PortalLink& link, float time, std::vector<Instance>& out) {
+  // A small round portal at each end, built up off the floor: a dark pedestal with a metal bevel
+  // and a ring of lamps, three curved fins leaning in over it, and two rings of light hovering
+  // above that turn against each other. Asleep it is dark with one amber lamp circling and the
+  // rings still; awake it glows amber and waits for its pair; linked, both ends glow cyan, the
+  // rings spin and bob, a twisting double helix of light climbs out of a bright disc inside a soft
+  // beam, and motes are drawn up through it.
+  for (int end = 0; end < 2; ++end) {
+    const bool on = end == 0 ? link.fromOn : link.toOn, linked = link.linked();
+    const glm::vec3 p = end == 0 ? link.from : link.to;
+    const glm::vec3 colour = linked ? glm::vec3(.3F, .95F, 1) : glm::vec3(1, .62F, .2F), off(.16F, .18F, .19F);
+    const float flare = link.pulse, seed = float(end) * 1.7F;
+    // Pedestal and bevel.
+    appendBox(out, p + glm::vec3(0, .07F, 0), {1.8F, .14F, 1.8F}, dark, 0, 1); out.back().primitive = Primitive::Cylinder;
+    appendBox(out, p + glm::vec3(0, .15F, 0), {1.55F, .04F, 1.55F}, {.42F, .46F, .5F}, 0, 1); out.back().primitive = Primitive::Cylinder;
+    appendBox(out, p + glm::vec3(0, .17F, 0), {1.2F, .02F, 1.2F}, on ? colour * .35F : glm::vec3(.06F, .07F, .08F), on ? std::min(.98F, .45F + .35F * flare) : 0, 1); out.back().primitive = Primitive::Cylinder;
+    for (int i = 0; i < 18; ++i) {
+      const float a = float(i) * .349F;
+      const bool lit = on || int(std::fmod(time * 9.F, 18.F)) == i;
+      const float k = on ? .6F + .4F * std::sin(time * (linked ? 4.F : 2.F) + float(i) * .35F) : 1.F;
+      appendBox(out, p + glm::vec3(std::sin(a) * .83F, .1F, std::cos(a) * .83F), {.07F, .05F, .12F}, lit ? colour : off, lit ? std::min(.98F, .45F + .45F * k + flare) : 0, 1, a);
+    }
+    // Three fins: each a curved claw of three segments rising from the rim and leaning in, with a
+    // light strip on its inner face.
+    for (int f = 0; f < 3; ++f) {
+      const float a = float(f) * 2.094F + .5F;
+      const glm::vec3 out1(std::cos(a), 0, std::sin(a));
+      const glm::vec3 pts[4]{p + out1 * .82F + glm::vec3(0, .14F, 0), p + out1 * .84F + glm::vec3(0, .55F, 0), p + out1 * .74F + glm::vec3(0, .95F, 0), p + out1 * .56F + glm::vec3(0, 1.22F, 0)};
+      for (int k = 0; k < 3; ++k) {
+        out.push_back({between(pts[k], pts[k + 1], .13F - .025F * float(k)), glm::vec4(.36F, .4F, .44F, 1), {1, 0, .45F, 1}, Primitive::Box, Blend::Opaque});
+        const glm::vec3 inner = -out1 * .07F;
+        out.push_back({between(pts[k] + inner, pts[k + 1] + inner, .035F), glm::vec4(on ? colour : off, 1), {0, on ? 2.F + flare : 1.05F, 0, 1}, Primitive::Box, on ? Blend::Additive : Blend::Opaque});
+      }
+      appendGlow(out, pts[3] - out1 * .05F, glm::vec3(.07F), on ? colour : glm::vec3(.4F, .42F, .44F), on ? .9F : .25F, 1.6F);
+    }
+    // Two hovering rings turning against each other (still while asleep), bobbing when linked.
+    for (int r = 0; r < 2; ++r) {
+      const float radius = r == 0 ? .62F : .46F, spin = on ? time * (r == 0 ? 1.4F : -2.1F) * (linked ? 1.6F : .6F) : 0;
+      const float height = (r == 0 ? .55F : 1.05F) + (linked ? .06F * std::sin(time * 2.2F + float(r) * 1.7F + seed) : 0);
+      for (int i = 0; i < 14; ++i) {
+        if (!on && i % 2) continue;
+        const float a0 = float(i) * .4488F + spin, a1 = a0 + .33F;
+        out.push_back({between(p + glm::vec3(std::cos(a0) * radius, height, std::sin(a0) * radius), p + glm::vec3(std::cos(a1) * radius, height, std::sin(a1) * radius), .045F),
+                       glm::vec4(on ? colour : off, on ? .9F : 1), {0, on ? 2.2F + flare : 1.02F, 0, 1}, Primitive::Box, on ? Blend::Additive : Blend::Opaque});
+      }
+    }
+    if (!on) continue;
+    appendGlow(out, p + glm::vec3(0, .2F, 0), glm::vec3(.7F, .06F, .7F), colour, .3F + .35F * flare, 1.5F);
+    if (!linked) continue;
+    // Linked: a bright disc, a double helix climbing out of it inside a soft beam, rising motes.
+    appendGlow(out, p + glm::vec3(0, .21F, 0), glm::vec3(.5F, .03F, .5F), {.85F, 1, 1}, .55F + .3F * std::sin(time * 3.F + seed), 1.9F);
+    for (int strand = 0; strand < 2; ++strand)
+      for (int k = 0; k < 14; ++k) {
+        const float h0 = .2F + float(k) * .1F, h1 = h0 + .1F, r = .32F - .012F * float(k);
+        const float a0 = time * 3.2F + float(strand) * 3.14159F + h0 * 4.F, a1 = time * 3.2F + float(strand) * 3.14159F + h1 * 4.F;
+        out.push_back({between(p + glm::vec3(std::cos(a0) * r, h0, std::sin(a0) * r), p + glm::vec3(std::cos(a1) * r, h1, std::sin(a1) * r), .04F), glm::vec4(colour, 1.F - float(k) / 16.F), {0, 2.3F, 0, 1}, Primitive::Box, Blend::Additive});
+      }
+    for (int i = 0; i < 8; ++i) {
+      const float life = std::fmod(time * .8F + float(i) * .125F + seed, 1.F), a = float(i) * .785F + time;
+      appendGlow(out, p + glm::vec3(std::cos(a) * .4F * (1 - life), .2F + 1.5F * life, std::sin(a) * .4F * (1 - life)), glm::vec3(.05F), colour, std::sin(life * 3.14159F), 1.8F);
+    }
+    out.push_back({between(p + glm::vec3(0, .18F, 0), p + glm::vec3(0, 1.6F, 0), 1.1F), glm::vec4(colour, .08F + .1F * flare), {1, 2, 0, 1}, Primitive::Cylinder, Blend::Additive});
+  }
+}
+
+// Electric floor plate (full edition): a dark tile with a glowing cross, teal while safe, amber
+// and flickering in its warning second, red while live. Live plates crackle: arcs leap between
+// points across the plate and up into the air, with hot flashes where they land. The arcs are
+// drawn from the clock (not particles), so a yard of plates never fills the particle pool.
+void appendTrapPlate(const FloorTrap& trap, TrapPhase phase, float time, int seed, std::vector<Instance>& out) {
+  const glm::vec3 dark(.065F, .085F, .10F), teal(.12F, .39F, .57F), amber(1.0F, .57F, .13F), red(.95F, .22F, .14F);
+  const glm::vec3 colour = phase == TrapPhase::Active ? red : phase == TrapPhase::Warning ? amber : teal;
+  const float glow = phase == TrapPhase::Active ? .7F : phase == TrapPhase::Warning ? .25F + .25F * std::sin(time * 18) : .1F;
+  for (float x = trap.area.min.x + .5F; x < trap.area.max.x; x += 1)
+    for (float z = trap.area.min.z + .5F; z < trap.area.max.z; z += 1) {
+      const auto tile = trap.tileBounds(x, z);
+      appendBox(out, (tile.min + tile.max) * .5F, tile.max - tile.min, dark, 0, 1);
+      appendBox(out, {x, trap.area.min.y + .09F, z}, {.65F, .025F, .12F}, colour, glow, 1, .785F);
+      appendBox(out, {x, trap.area.min.y + .095F, z}, {.12F, .025F, .65F}, colour, glow, 1, .785F);
+    }
+  if (phase != TrapPhase::Active && phase != TrapPhase::Warning) return;
+  const auto hash = [](float n) { const float h = std::sin(n * 12.9898F) * 43758.5453F; return h - std::floor(h); };
+  const glm::vec3 lo = trap.area.min, hi = trap.area.max;
+  const float cells = (hi.x - lo.x) * (hi.z - lo.z), y = lo.y + .12F;
+  const float deal = std::floor(time * 9.F);  // the arcs are re-dealt nine times a second
+  if (phase == TrapPhase::Warning) {
+    // Warning: the plate fizzes, a few amber embers hopping off it.
+    const int embers = std::min(6, 1 + int(cells / 4));
+    for (int i = 0; i < embers; ++i) {
+      const float k = float(seed * 31 + i);
+      const glm::vec3 at(glm::mix(lo.x, hi.x, hash(deal + k * 1.3F)), y + .15F * hash(deal * 1.9F + k), glm::mix(lo.z, hi.z, hash(deal * 2.7F + k * .7F)));
+      appendGlow(out, at, glm::vec3(.1F), {1, .66F, .24F}, .95F * hash(deal + k * 4.1F), 2.2F);
+    }
+    return;
+  }
+  const int arcs = std::min(10, 2 + int(cells / 3));
+  for (int i = 0; i < arcs; ++i) {
+    const float k = float(seed * 53 + i);
+    glm::vec3 from(glm::mix(lo.x, hi.x, hash(deal + k * 1.7F)), y, glm::mix(lo.z, hi.z, hash(deal * 1.3F + k * 2.9F)));
+    const float a = hash(deal * 2.1F + k) * 6.2831853F, length = .6F + .9F * hash(deal * 3.3F + k), up = hash(deal * 4.7F + k);
+    const glm::vec3 to = from + glm::vec3(std::cos(a) * length, .5F * up * up, std::sin(a) * length);
+    // Three jagged segments, a bright core inside a softer sheath.
+    glm::vec3 p = from;
+    for (int s = 1; s <= 3; ++s) {
+      glm::vec3 q = glm::mix(from, to, float(s) / 3.F);
+      if (s < 3) q += glm::vec3(hash(deal + k + float(s)) - .5F, (hash(deal * 1.1F + k + float(s)) - .3F) * .4F, hash(deal * 1.7F + k - float(s)) - .5F) * .35F;
+      out.push_back({between(p, q, .05F), glm::vec4(1, .85F, .6F, 1), {0, 3.2F, 0, 1}, Primitive::Box, Blend::Additive});
+      out.push_back({between(p, q, .16F), glm::vec4(1, .45F, .18F, .5F), {1, 2.4F, 0, 1}, Primitive::Box, Blend::Additive});
+      p = q;
+    }
+    appendGlow(out, from, glm::vec3(.5F), {1, .35F, .12F}, .6F, 2.F);
+    appendGlow(out, to, glm::vec3(.18F), {1, .65F, .3F}, .9F, 2.4F);
+  }
+}
+
 void SceneModels::appendSwitch(glm::vec3 position, bool active, float press, std::vector<Instance>& out) {
   appendBox(out, position + glm::vec3(0, .09F, 0), {.75F, .18F, .65F}, dark, 0, 1);
   appendBox(out, position + glm::vec3(0, .46F, 0), {.48F, .62F, .4F}, shell, 0, 1); out.back().primitive=Primitive::Cylinder;
@@ -267,18 +452,36 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
  auto root=glm::translate(glm::mat4(1),p.position+glm::vec3(0,bodyHop(p),0));
  root=glm::scale(glm::rotate(root,p.yaw,{0,1,0}),bodyScale(p));
  robot_.append(root,out);
+ if(p.motion.hitAge<.18F) {
+  const float k=1-p.motion.hitAge/.18F;
+  appendGlow(out,p.position+glm::vec3(0,.85F,0),glm::vec3(1.1F+.6F*(1-k)),{1,.62F,.28F},.55F*k,2.F);
+  appendGlow(out,p.position+glm::vec3(0,.85F,0),glm::vec3(.45F),{1,.95F,.85F},.8F*k,2.6F);
+ }
+ if(p.backGlow>.01F&&p.deathTime<=0) {
+  const auto transforms=robot_.transforms(root);
+  const glm::vec3 back(transforms[std::size_t(pack_)]*glm::vec4(0,.03F,.2F,1));
+  appendGlow(out,back,glm::vec3(.30F,.40F,.26F),{.5F,.85F,1},.36F*p.backGlow,1.3F);
+ }
  for(const auto& particle:game.particles()) if(particle.remaining>0) {
   const float fade=std::min(1.F,particle.remaining/.18F);
   if(particle.kind==ParticleKind::Spark||particle.kind==ParticleKind::Ray) {
-   out.push_back({between(particle.position,particle.position-(particle.kind==ParticleKind::Ray?particle.extent*fade:particle.velocity*.065F*fade),particle.size*fade),glm::vec4(particle.colour,fade),{0,1.6F,0,1},Primitive::Flat,Blend::Additive});
-   appendGlow(out,particle.position,glm::vec3(particle.size*3),particle.colour,.22F*fade,.5F);
+   // A coloured streak with a white-hot core, trailing back along the motion, in a soft halo.
+   const glm::vec3 tail=particle.position-(particle.kind==ParticleKind::Ray?particle.extent*fade:particle.velocity*.09F*fade);
+   out.push_back({between(particle.position,tail,particle.size*1.7F*fade),glm::vec4(particle.colour,fade),{0,2.9F,0,1},Primitive::Flat,Blend::Additive});
+   out.push_back({between(particle.position,glm::mix(particle.position,tail,.6F),particle.size*.7F*fade),glm::vec4(glm::mix(particle.colour,glm::vec3(1),.7F),fade),{0,3.2F,0,1},Primitive::Flat,Blend::Additive});
+   appendGlow(out,particle.position,glm::vec3(particle.size*6),particle.colour,.45F*fade,1.4F);
+  } else if(particle.kind==ParticleKind::Dust) {
+   // Ground dust: a soft grey puff that swells and thins away.
+   const float age=1-particle.remaining/particle.lifetime,r=particle.size+particle.growth*age;
+   out.push_back({glm::scale(glm::translate(glm::mat4(1),particle.position),glm::vec3(r)),glm::vec4(particle.colour,.72F*(1-age)*(1-age)),{1,2.1F,.6F,1},Primitive::Blob,Blend::Alpha});
   } else {
-   appendBox(out,particle.position,glm::vec3(particle.size*fade),particle.colour,0,.5F,particle.seed+(particle.lifetime-particle.remaining)*8);
+   const float heat=std::clamp(particle.remaining/particle.lifetime,0.F,1.F);
+   appendBox(out,particle.position,glm::vec3(particle.size*1.35F*fade),glm::mix(particle.colour,glm::vec3(1,.7F,.35F),.5F*heat),.75F*heat,.5F,particle.seed+(particle.lifetime-particle.remaining)*8);
   }
  }
- for(const auto& c:game.cores())if(!c.collected) {
-  appendBox(out,c.position-glm::vec3(0,.65F,0),{.65F,.1F,.65F},{.28F,.32F,.36F});
-  appendBox(out,c.position,{.42F,.55F,.42F},{.25F,.65F,.85F},.12F,0);
+ for(std::size_t i=0;i<game.cores().size();++i) {
+  const auto& c=game.cores()[i];
+  if(!c.collected) appendCore(c.position,game.elapsed()+float(i),out,c.position.y-.8F);
  }
  for(const auto& pad:game.jumpPads()) {
   appendBox(out,pad.position+glm::vec3(0,.012F,0),{1.8F,.024F,1.8F},dark,0,.6F);
@@ -294,21 +497,13 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
   appendBox(out,g+glm::vec3(side*(.8F+game.gateOpen()*1.6F),1.4F,0),{1.6F,2.8F,.4F},{.35F,.43F,.48F},0,1);
  }
  appendBox(out,g+glm::vec3(0,3,0),{4,.4F,.6F},{.88F,.88F,.83F});
- appendBox(out,g+glm::vec3(0,3,.32F),{1.2F,.16F,.06F},lamp,.1F);
+ appendBox(out,g+glm::vec3(0,3,.32F),{1.2F,.16F,.06F},lamp,.8F);
  appendBox(out,g+glm::vec3(0,.015F,-.9F),{3,.03F,1.3F},lamp);
  for(const auto& sw:game.switches()) appendSwitch(sw.position,game.trapPhase(sw.trap)==TrapPhase::Disabled,sw.animation,out);
- for(std::size_t i=0;i<game.traps().size();++i) {
-  const auto& t=game.traps()[i]; const auto phase=game.trapPhase(i);
-  const glm::vec3 colour=phase==TrapPhase::Active?red:phase==TrapPhase::Warning?amber:teal;
-  for(float x=t.area.min.x+.5F;x<t.area.max.x;x+=1) for(float z=t.area.min.z+.5F;z<t.area.max.z;z+=1) {
-   appendBox(out,{x,1.04F,z},{.92F,.08F,.92F},dark,0,1);
-   appendBox(out,{x,1.085F,z},{.8F,.025F,.07F},colour,.2F,1);
-   if(phase==TrapPhase::Active) for(float dx:{-.23F,.23F}) for(float dz:{-.23F,.23F}) {
-    // Stacked, tapering metal voxels form readable retractable spikes.
-    for(int k=0;k<4;++k) { float w=.22F-float(k)*.045F; appendBox(out,{x+dx,1.15F+.15F*k,z+dz},{w,.15F,w},{.68F,.72F,.76F},0,1); }
-   }
-  }
- }
+ for(std::size_t i=0;i<game.traps().size();++i) appendTrapPlate(game.traps()[i],game.trapPhase(i),game.elapsed(),int(i),out);
+ for(const auto& plate:game.plates()) appendPlate(plate,game.doors()[std::size_t(plate.door)].hold,game.elapsed(),out);
+ for(const auto& door:game.doors()) appendDoor(door,game.elapsed(),out);
+ for(const auto& link:game.portals()) appendPortal(link,game.elapsed(),out);
  for(const auto& h:game.movers()) {
   const auto parts=h.collisionParts();
   for(std::size_t i=0;i<parts.size();++i) appendBox(out,(parts[i].min+parts[i].max)*.5F,parts[i].max-parts[i].min,i==0?dark:i==1?red:amber,i==0?0:.2F,1);

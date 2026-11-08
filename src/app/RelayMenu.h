@@ -13,7 +13,10 @@ int settingsSelection();
 // Control settings: rebind keys. pressedKey is the first key pressed this frame (or -1);
 // escape cancels a capture or leaves. Returns true when the player leaves.
 bool drawSettings(KeyBindings& keys,float time,int pressedKey,bool escape,bool overGame);
-// Blackout between levels: black is the cover, card the title card's opacity.
+// Blackout between levels: black is the cover, card the title card's opacity. The card is a small
+// kicker line ("LEVEL n", "RESTART / LEVEL n") over the level's name and a thin cyan rule that
+// draws out under it.
+void drawLevelTransition(float black,float card,const char* kicker,const char* name);
 
 
 // Holographic interface palette shared by menus and HUD.

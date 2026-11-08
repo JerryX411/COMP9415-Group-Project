@@ -9,15 +9,34 @@ The linked release is the November 7 snapshot; newer local graphics demonstratio
 
 Current Member-A version: the reduced edition of Core Explorer. The advanced version is preserved in Git history (48f981d) and the separate Core-Explorer repository.
 
-Includes two simple voxel yards, robot movement/animation, WASD, mouse camera, Space jump, C toggle crouch, E switch interaction, retractable spikes, moving blocks, armour, restart/pause, and a plain UI over a cubemap background. E retracts the linked spikes for five seconds. R restarts; Esc pauses. Select LEVEL in the title menu to change maps.
+Includes two simple voxel yards plus Helios Yard (see below), robot movement/animation, WASD, Left Shift sprint, mouse camera, Space jump, C toggle crouch, E switch interaction, electric floor plates, moving blocks, armour, restart/pause, and a plain UI over a procedural star sky (see [docs/SKYBOX.md](docs/SKYBOX.md)). E disables the linked floor plate for five seconds. R restarts; Esc pauses. Select LEVEL in the title menu to change maps.
 
-Removed: arrival cinematic, sprint/boost/slide/wall actions, jetpack, portals, checkpoints, advanced pickup effects, training, workshop, advanced particle effects, and the full audio pack. The reduced build is intentionally silent.
+Removed: arrival cinematic, boost/slide/wall actions, jetpack, checkpoints, advanced pickup effects, training, workshop, advanced particle effects, and the full audio pack. The reduced build is intentionally silent.
 
 Build: `cmake -S . -B build`, then `cmake --build build`. Run `build/CoreExplorerLite.exe` (Windows) or `build/CoreExplorerLite` (Linux). Tests: `ctest --test-dir build --output-on-failure`.
 
 Title, pause, settings and result screens use large bold text over the scene: no panels, borders, button fills or fullscreen tint. Selected menu text is cyan; the gameplay HUD mirrors the advanced layout: five slanted armour cells at top left, filled/dim hexagonal core slots at bottom centre, and large countdown digits (or an infinity glyph in training) at top right, all without backing panels or outlines. A small glyph shadow preserves readability.
 
 UI uses Segoe UI Bold from Windows when available, or the bundled Rajdhani font under its included OFL licence. Robot and map geometry are generated in code.
+
+## Helios Yard (synced from the full edition)
+
+The third level, **Helios Yard**, is the full edition's hand-edited Level 1. Choose it with LEVEL on the title screen (or `--level 2`); Enter after a win moves on through the three levels. The map is read from `assets/levels/helios_yard.txt`, a copy of the full edition's `level0.txt` in the same file format (`LevelData`). To update it, copy the newer file over it and keep the first comment line. The voxel world grew from 64 to 96 cells across to fit the 84 × 84 room.
+
+Only what this map needs came across from the full edition:
+- **Materials:** guide amber, cyan beacon, teal shortcut mark, sandstone and slate, on walls and as floor paint. The guide colours glow faintly.
+- **Left Shift sprint:** 8.4 m/s while moving and standing, with the sprint pose, a wider view and the backpack glow. Crouching stops it. It works in every level and can be rebound in Settings.
+- **Pressure plates and blast doors:** one step on a plate unlocks its door for good, and only a restart seals it again. Doors and plates can stand on upper floors, and a plate only counts a courier standing on its own level.
+- **Portals:** wake each end with E. Once both are awake, step into either one to cross to the other. The arrival end waits until you step off it.
+- **Cores:** the full edition's core: a bobbing capsule between white caps, with a halo, a light column and rising motes.
+- **Floor traps:** the full edition's electric plates replace the spikes in every level. Each tile has a glowing cross: teal while safe, flickering amber in its warning second, red while live. Live plates crackle with arcs between points and up into the air. The arcs are drawn from the clock rather than spawned as particles, so 48 plates never fill the 128-particle pool. Damage needs the feet on the plate.
+- **Mission HUD:** Helios Yard shows no words in play: no messages, prompts or key line. A door glyph always marks the exit and is pinned to the screen edge, with an arrow, when the exit is off screen. It is amber while sealed and mint once open. Armour, the seven core slots and the 10:00 countdown stay. The two original yards keep their teaching text.
+
+**Level changes and ground dust.** Every way into a level has a plain title card: a small kicker line, the level name, and a thin cyan rule drawing out under it, over black. The clock holds until the card has gone. After a win, Enter fades out (0.55 s), shows "LEVEL n" for about 1.5 s, then fades in, 2.8 s in all. Start from the title menu begins on black with the card, then fades in, 2.25 s. Restart (R, or Restart in the pause menu) is shorter: a 0.3 s fade, a "RESTART / LEVEL n" card, and back in, 1.5 s. Running kicks a small grey puff from the planted foot on each step (a little larger when sprinting), a jump leaves a puff at take-off, and a landing throws a ring that grows with the fall. The puffs are soft alpha blobs from the same 128-particle pool, and they swell and fade within about half a second. Captures: `--next` (or `--change start|restart`) starts a change at once; `--effect run` and `--effect land` freeze a sprint or a landing.
+
+**Brighter sparks.** Every spark and light streak is drawn as a wider coloured streak with a white-hot core, a longer trail and a bigger, brighter halo. Debris chips are larger and glow hot as they fly. The emitters keep their particle counts but make bigger particles: impact sparks are hotter orange with pale-yellow ones mixed in. A hit also flashes warm light at the chest for a moment. The shock-plate arcs, their landing flashes and the warning embers are brighter too, and the ground dust is a little denser.
+
+Nothing else was synced: no checkpoints, pickups, crimson tiles, slides, wall actions, training, sounds, shadows or bloom. `lite_tests` also covers Helios Yard: the map's pieces and materials, a clear spawn, permanent door unlocks (ground and upper floor), portal linking and crossing, restart, shock damage and sprint. Captures: `CoreExplorerLite --play --level 2 --overview --frames 40 --capture overview.png`; `--warp x y z` starts the courier elsewhere.
 
 ## Coursework reference
 
@@ -29,13 +48,13 @@ Each map has three blue cores. Approach and press the interact key (E by default
 
 ## Member-B integration
 
-Integrated JerryX411's skybox contribution from Member-B commit db8a1acf1a2562a64f99932586163ae0706976a1 using an author-preserving cherry-pick. Includes cubemap rendering, menu panels, surface detail adjustments and the tutorial passage change. The preceding a08ef51 commit only packages build tools/dependencies and generated output; it is intentionally excluded from the source checkout. See docs/SKYBOX.md for implementation and assets/textures/skybox/README.md for the supplied image's attribution status.
+Integrated JerryX411's skybox contribution from Member-B commit db8a1acf1a2562a64f99932586163ae0706976a1 using an author-preserving cherry-pick. Includes cubemap rendering, menu panels, surface detail adjustments and the tutorial passage change. The preceding a08ef51 commit only packages build tools/dependencies and generated output; it is intentionally excluded from the source checkout. The cube-map skybox runtime and assets stay removed; a procedural star sky replaced them (see docs/SKYBOX.md).
 
 ## Lite timer and impact feedback
 
 The Tutorial Yard has unlimited time (an infinity glyph). The Obstacle Yard starts with a 120-second countdown, displayed as minutes:seconds and highlighted during the last 20 seconds. Timing pauses with the pause/settings menu or loss of focus and freezes on completion/failure. At zero, TIME UP ends the challenge without applying damage. Restart or level change restores the appropriate limit. Result panels show remaining time or UNLIMITED.
 
-Damage briefly recoils the torso/head/arms in the hit direction and emits 24 small sparks/metal fragments. The fixed 128-particle pool uses gravity, drag, voxel, moving-obstacle and fixture collision/bounce and lifetime cleanup, including after failure; pausing freezes the simulation. No continuous emitter is active. The supplied skybox retains its original image, with a gentle blue lift, horizon haze, mip filtering and slower menu rotation.
+Damage briefly recoils the torso/head/arms in the hit direction and emits 24 small sparks/metal fragments. The fixed 128-particle pool uses gravity, drag, voxel, moving-obstacle and fixture collision/bounce and lifetime cleanup, including after failure; pausing freezes the simulation. No continuous emitter is active. The background is a procedural star sky. Lighting uses ambient, diffuse and specular terms without additional shadow or effect-light passes.
 
 Core collection emits one short burst of 20 cyan-white sparks; impact sparks are amber with slightly longer luminous streaks. Both reuse the bounded particle pool and expire automatically.
 

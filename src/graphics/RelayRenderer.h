@@ -2,7 +2,6 @@
 #include <vector>
 #include "graphics/RelayModels.h"
 #include "graphics/Shader.h"
-#include "graphics/Skybox.h"
 #include "core/FollowCamera.h"
 
 namespace relay {
@@ -36,16 +35,16 @@ class Renderer {
   // Menu background only; does not rebuild terrain or restore the old robot showroom.
   void drawMenuBackground(int width, int height, float time);
   glm::vec2 project(glm::vec3 point, float width, float height) const;
+  // Like project(), but pinned inside the screen margins (top: the band kept clear for the HUD);
+  // z is 1 on screen, 0 when pinned to the edge.
+  glm::vec3 projectToEdge(glm::vec3 point, float width, float height, float margin, float top) const;
   const RenderStats& stats() const { return stats_; }
  private:
   void rebuildTerrain(const Game& game, bool optimised, bool whitebox);
-  // Effects light the scene: flashes, fireballs, arcs, pillars, cores and live traps.
-  void gatherLights(const Game& game);
-  static constexpr int maxLights = 12;
-  std::array<glm::vec4,maxLights> lightPosition_{}, lightColour_{};
-  int lightCount_ = 0;
-  craft::graphics::Shader shader_;
-  Skybox skybox_;
+  // Procedural star sky (assets/shaders/sky.*): one fullscreen triangle behind everything.
+  void drawSky(const glm::mat4& viewProjection, bool screenSpace, float aspect, float time);
+  craft::graphics::Shader shader_, sky_;
+  unsigned skyVao_ = 0;
   SceneModels models_;
   std::vector<Instance> instances_;
   unsigned cubeVao_ = 0, cubeBuffer_ = 0, instanceBuffer_ = 0;
