@@ -1,4 +1,5 @@
 #include "core/RelayGame.h"
+#include "core/FollowCamera.h"
 #include <cmath>
 #include "graphics/RelayModels.h"
 #include <iostream>
@@ -67,6 +68,26 @@ int main(){try{
  check(g.liveParticleCount()>=50&&g.liveParticleCount()<=int(g.particles().size()),"Overlapping pad and hit bursts keep their particles");
  g.warpPlayer({8,1,25});advance(g,1.2F);check(g.liveParticleCount()==0,"Overlapping particles fully recycle");
  g.reset(0); auto start=g.player().position;relay::Input move;move.movement={0,1};advance(g,.5F,move);check(glm::distance(start,g.player().position)>1,"WASD movement");
+ {
+  g.reset(relay::Game::heliosLevel);
+  relay::FollowCamera camera;
+  camera.reset(g);
+  camera.orbit(600.F,0);
+  relay::Input aim;
+  aim.facingYaw=camera.yaw();
+  auto position=g.player().position;
+  advance(g,.1F,aim);
+  check(g.player().yaw==camera.yaw()&&glm::distance(position,g.player().position)<.001F,"Camera turns the idle courier in place");
+
+  for(const auto keys:{glm::vec2(1,0),glm::vec2(0,-1)}) {
+   position=g.player().position;
+   aim.movement=camera.movement(keys.x,keys.y);
+   advance(g,.3F,aim);
+   const auto moved=g.player().position-position;
+   check(glm::dot(glm::vec2(moved.x,moved.z),aim.movement)>.5F&&g.player().yaw==camera.yaw(),
+         "Strafing and backing up preserve the camera heading");
+  }
+ }
  g.reset(0); relay::Input jump;jump.jumpPressed=jump.jumpHeld=true;advance(g,.25F,jump);check(g.player().position.y>2,"Jump");advance(g,1);check(g.player().grounded,"Landing");
  g.reset(0);relay::Input crouch;crouch.crouchPressed=true;g.update(.01F,crouch);advance(g,.1F);check(g.player().crouching,"Toggle crouch must persist");
  g.warpPlayer({17.5F,1,23});move.movement={1,0};advance(g,2.8F,move);check(g.player().position.x>23.7F,"Crouch tunnel traversal");

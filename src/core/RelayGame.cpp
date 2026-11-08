@@ -552,7 +552,13 @@ void Game::step(float dt,const Input& input) {
  const auto target=movement*(player_.crouching?crouchSpeed:player_.sprinting?sprintSpeed:speed);
  player_.locomotion=glm::mix(player_.locomotion,target,1-std::exp(-18.F*dt));
  float turn=0;
- if(glm::length(movement)>.01F) { turn=std::remainder(std::atan2(-movement.x,-movement.y)-player_.yaw,2*pi); player_.yaw+=turn*(1-std::exp(-16*dt)); }
+ if(input.facingYaw&&std::isfinite(*input.facingYaw)) {
+  turn=std::remainder(*input.facingYaw-player_.yaw,2*pi);
+  player_.yaw=*input.facingYaw;
+ } else if(glm::length(movement)>.01F) {
+  turn=std::remainder(std::atan2(-movement.x,-movement.y)-player_.yaw,2*pi);
+  player_.yaw+=turn*(1-std::exp(-16*dt));
+ }
  player_.jumpBuffer=input.jumpPressed?jumpBufferDuration:std::max(0.F,player_.jumpBuffer-dt);
  player_.coyoteTime=player_.grounded?coyoteDuration:std::max(0.F,player_.coyoteTime-dt);
  if(player_.jumpBuffer>0&&player_.coyoteTime>0&&player_.interactionTime<=0&&player_.hitStun<=0&&!player_.crouching) {

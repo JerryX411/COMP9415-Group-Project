@@ -1,4 +1,5 @@
 #include "app/AppUi.h"
+#include "app/Minimap.h"
 #include <algorithm>
 #include <array>
 #include <iterator>
@@ -129,27 +130,32 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
   // The exit: a door glyph that always marks the gate, pinned to the screen edge (with a
   // chevron pointing on) while the gate is off screen. Amber while sealed, mint once open.
   const auto at=renderer.projectToEdge(game.gatePosition()+glm::vec3(0,3.4F,0),size.x,size.y,54*s,190*s);
-  const bool open=game.gateUnlocked();const ImU32 c=open?mint:amber;
-  const ImVec2 p(at.x,at.y);const float r=24*s,pulse=open?.75F+.25F*std::sin(t*4):1.F;
-  d->AddCircleFilled(p,r,withAlpha(slate,.62F),40);
-  d->AddCircle(p,r,withAlpha(c,.9F*pulse),40,2*s);
-  const float w=r*.62F,top=p.y-r*.55F,bottom=p.y+r*.55F;
-  d->PathLineTo({p.x-w*.5F,bottom});d->PathLineTo({p.x-w*.5F,top+w*.5F});
-  d->PathArcTo({p.x,top+w*.5F},w*.5F,3.14159265F,6.2831853F,12);d->PathLineTo({p.x+w*.5F,bottom});
-  d->PathStroke(c,0,2.2F*s);
-  d->AddLine({p.x-w*.75F,bottom},{p.x+w*.75F,bottom},c,2.2F*s);
-  if(open) {
-   d->AddRectFilled({p.x-w*.5F+2*s,top+w*.5F},{p.x+w*.5F-2*s,bottom-1*s},withAlpha(c,.35F*pulse));
-   d->AddQuadFilled({p.x-w*.5F,top+w*.35F},{p.x-w*.05F,top+w*.6F},{p.x-w*.05F,bottom-2*s},{p.x-w*.5F,bottom},withAlpha(c,.9F));
-  } else {
-   d->AddRectFilled({p.x-w*.5F+3*s,top+w*.55F},{p.x+w*.5F-3*s,bottom-2*s},withAlpha(c,.55F));
-   d->AddCircleFilled({p.x+w*.22F,(top+bottom)*.5F+r*.08F},1.8F*s,withAlpha(slate,.9F));
-  }
-  if(at.z<.5F) {
-   const glm::vec2 dir=glm::normalize(glm::vec2(at.x-size.x*.5F,at.y-size.y*.5F)+glm::vec2(0,1e-3F));
-   const glm::vec2 tip=glm::vec2(at.x,at.y)+dir*(r+10*s),side(-dir.y,dir.x);
-   const glm::vec2 l=tip-dir*9.F*s+side*7.F*s,rr=tip-dir*9.F*s-side*7.F*s;
-   d->AddTriangleFilled({tip.x,tip.y},{l.x,l.y},{rr.x,rr.y},withAlpha(c,.9F));
+  const auto map = game.level()==Game::heliosLevel
+      ? drawHeliosMinimap(*d,game,size,s) : MinimapCircle{};
+  // The minimap has its own exit direction cue when this glyph would cover it.
+  if(!map.overlaps({at.x,at.y},44*s)) {
+   const bool open=game.gateUnlocked();const ImU32 c=open?mint:amber;
+   const ImVec2 p(at.x,at.y);const float r=24*s,pulse=open?.75F+.25F*std::sin(t*4):1.F;
+   d->AddCircleFilled(p,r,withAlpha(slate,.62F),40);
+   d->AddCircle(p,r,withAlpha(c,.9F*pulse),40,2*s);
+   const float w=r*.62F,top=p.y-r*.55F,bottom=p.y+r*.55F;
+   d->PathLineTo({p.x-w*.5F,bottom});d->PathLineTo({p.x-w*.5F,top+w*.5F});
+   d->PathArcTo({p.x,top+w*.5F},w*.5F,3.14159265F,6.2831853F,12);d->PathLineTo({p.x+w*.5F,bottom});
+   d->PathStroke(c,0,2.2F*s);
+   d->AddLine({p.x-w*.75F,bottom},{p.x+w*.75F,bottom},c,2.2F*s);
+   if(open) {
+    d->AddRectFilled({p.x-w*.5F+2*s,top+w*.5F},{p.x+w*.5F-2*s,bottom-1*s},withAlpha(c,.35F*pulse));
+    d->AddQuadFilled({p.x-w*.5F,top+w*.35F},{p.x-w*.05F,top+w*.6F},{p.x-w*.05F,bottom-2*s},{p.x-w*.5F,bottom},withAlpha(c,.9F));
+   } else {
+    d->AddRectFilled({p.x-w*.5F+3*s,top+w*.55F},{p.x+w*.5F-3*s,bottom-2*s},withAlpha(c,.55F));
+    d->AddCircleFilled({p.x+w*.22F,(top+bottom)*.5F+r*.08F},1.8F*s,withAlpha(slate,.9F));
+   }
+   if(at.z<.5F) {
+    const glm::vec2 dir=glm::normalize(glm::vec2(at.x-size.x*.5F,at.y-size.y*.5F)+glm::vec2(0,1e-3F));
+    const glm::vec2 tip=glm::vec2(at.x,at.y)+dir*(r+10*s),side(-dir.y,dir.x);
+    const glm::vec2 l=tip-dir*9.F*s+side*7.F*s,rr=tip-dir*9.F*s-side*7.F*s;
+    d->AddTriangleFilled({tip.x,tip.y},{l.x,l.y},{rr.x,rr.y},withAlpha(c,.9F));
+   }
   }
  }
  const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Sprint)+" SPRINT   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE   F1 GRAPHICS";

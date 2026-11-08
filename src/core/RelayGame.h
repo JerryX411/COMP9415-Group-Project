@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
@@ -47,6 +48,7 @@ struct Input {
   bool crouchPressed = false;  // Toggle crouch on this edge (the C key).
   bool sprintPressed = false;  // Sprint edge: cancels a slide straight into a run.
   bool wallPressed = false;    // Wall action (left mouse button): kick off or shove off a wall.
+  std::optional<float> facingYaw;  // Horizontal view angle in radians, when camera-controlled.
 };
 // Speed-pad states: a walk becomes a fast stride, a sprint becomes a low hover-flight.
 enum class Boost : std::uint8_t { None, Stride, Flight };

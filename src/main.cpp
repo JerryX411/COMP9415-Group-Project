@@ -119,7 +119,10 @@ int main(int argc,char** argv) {
     if(change.t>=change.end) change.t=-1;
    }
    const bool holding=change.t>=0&&change.t<change.cardEnd;
-   if(screen==Screen::Play&&!frozen&&!holding&&(focused||frames>0)) game.update(dt,input);
+   if(screen==Screen::Play&&!frozen&&!holding&&(focused||frames>0)) {
+    input.facingYaw=camera.yaw();
+    game.update(dt,input);
+   }
    if(!frozen)camera.update(game,dt);
    options.menu=screen==Screen::Title||(screen==Screen::Settings&&!settingsPause);
    if(options.menu) {
