@@ -168,7 +168,9 @@ void FollowCamera::update(const Game& game,float dt) {
   // at the exit cannot lift the view into the wall.
   bool gap=false; float gapAhead=-1,gapEnd=-1;
   const float speed=glm::length(player.locomotion);
-  const glm::vec2 at(player.position.x,player.position.z),ahead(-std::sin(player.yaw),-std::cos(player.yaw));
+  const glm::vec2 at(player.position.x,player.position.z);
+  // Probe along the path even when the courier is strafing or backing up.
+  const glm::vec2 ahead=speed>.1F?player.locomotion/speed:glm::vec2(-std::sin(player.yaw),-std::cos(player.yaw));
   if((player.crouching||speed>Game::sprintSpeed*.9F||tunnel_>0)&&game.state()==RunState::Playing) {
     const float reach=std::max(3.2F,speed*tunnelTime);
     // Find the first gap ahead (or the one the courier is in) and how far it runs.
