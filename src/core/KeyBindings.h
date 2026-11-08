@@ -7,7 +7,7 @@
 
 namespace relay {
 // Rebindable gameplay actions (camera stays on the mouse; Esc and menus are fixed).
-enum class KeyAction : int { Forward, Back, Left, Right, Jump, Crouch, Interact, Restart, Count };
+enum class KeyAction : int { Forward, Back, Left, Right, Jump, Crouch, Interact, Restart, Sprint, Count };
 
 struct KeyBindings {
   static constexpr int count = int(KeyAction::Count);

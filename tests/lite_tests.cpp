@@ -1,6 +1,8 @@
 #include "core/RelayGame.h"
 #include <cmath>
+#include "graphics/RelayModels.h"
 #include <iostream>
+#include <string>
 #include <stdexcept>
 void check(bool ok,const char* msg){if(!ok)throw std::runtime_error(msg);}
 void advance(relay::Game& g,float seconds,relay::Input in={}){for(int i=0;i<int(seconds*120);++i){g.update(1.F/120,in);in.jumpPressed=in.crouchPressed=in.interactPressed=false;}}
@@ -10,6 +12,60 @@ int main(){try{
   g.reset(level); check(g.portals().empty()&&g.checkpoints().empty()&&g.pickups().empty()&&g.speedPads().empty()&&g.doors().empty(),"Removed objects still present");
   check(!g.traps().empty()&&!g.movers().empty(),"Missing retained hazards");check(g.player().motion.spawnAge>=10,"Arrival effect active");
  }
+ g.reset(0);advance(g,1.25F);check(std::abs(g.elapsed()-1.25F)<.001F,"Run clock advances");
+ const float timeBefore=g.elapsed();g.update(0,{});g.update(-1,{});check(g.elapsed()==timeBefore,"Invalid dt must not move clock");
+ g.reset(1);check(g.elapsed()==0,"Level change resets clock");
+ g.reset(0);advance(g,4.1F);g.warpPlayer({14,1,13});g.update(.01F,{});
+ check(g.liveParticleCount()==24&&g.player().hitBlend>.7F,"Impact produces immediate recoil and a small burst");
+ const auto firstParticle=g.particles()[0].position;advance(g,.05F);
+ check(glm::distance(firstParticle,g.particles()[0].position)>.01F,"Impact particles move");
+ check(g.liveParticleCount()==24,"Damage cooldown prevents repeated bursts");
+ relay::SceneModels models;std::vector<relay::Instance> instances;models.append(g,instances);
+ bool hasSpark=false;for(const auto& instance:instances)if(instance.blend==relay::Blend::Additive)hasSpark=true;
+ check(hasSpark,"Impact sparks reach the renderer");
+ g.warpPlayer({8,1,25});advance(g,1);check(g.liveParticleCount()==0&&g.player().hitBlend<.01F,"Impact cleans up and pose recovers");
+ // Repeated valid trap hits reach failure; the last burst must still expire afterwards.
+ g.reset(0);
+ for(int attempt=0;attempt<8&&g.state()==relay::RunState::Playing;++attempt){
+  g.warpPlayer({8,1,25});advance(g,1.1F);
+  while(g.state()==relay::RunState::Playing&&g.trapPhase(0)!=relay::TrapPhase::Active)advance(g,.05F);
+  g.warpPlayer({14,1,13});g.update(.01F,{});
+ }
+ check(g.state()==relay::RunState::Lost&&g.liveParticleCount()>0,"Fatal damage burst");
+ const float lostTime=g.elapsed();advance(g,1);check(g.elapsed()==lostTime&&g.liveParticleCount()==0,"Failure freezes clock but settles particles");
+ g.reset(0);check(g.elapsed()==0&&g.liveParticleCount()==0,"Restart resets timer and particles");
+ g.reset(0);advance(g,4.1F);g.warpPlayer({14,1,13});g.update(.01F,{});
+ const auto hitPosition=g.player().position;const auto push=glm::normalize(g.player().knockback);
+ advance(g,.3F);const auto recoil=glm::vec2(g.player().position.x-hitPosition.x,g.player().position.z-hitPosition.z);
+ check(glm::dot(recoil,push)>1.7F&&glm::length(recoil)<2.1F,"Hit recoils approximately two cells away from damage");
+ check(!g.playerIntersectsScene(),"Recoil respects scene collision");
+ g.reset(0);advance(g,125);check(!g.timedLevel()&&g.state()==relay::RunState::Playing,"Tutorial has unlimited time");
+ g.reset(1);check(g.timeRemaining()==relay::Game::challengeTimeLimit,"Challenge countdown initial value");
+ advance(g,1.25F);check(std::abs(g.timeRemaining()-118.75F)<.01F,"Challenge counts down");
+ const float remaining=g.timeRemaining();g.update(0,{});check(g.timeRemaining()==remaining,"Stopped simulation keeps countdown");
+ advance(g,120);check(g.timedOut()&&g.timeRemaining()==0&&g.player().health==5,"Timeout fails without damaging robot");
+ const float timeoutElapsed=g.elapsed();advance(g,1);check(g.timeRemaining()==0&&g.elapsed()==timeoutElapsed,"Timeout stays frozen at zero");
+ g.reset(1);check(g.timeRemaining()==120&&!g.timedOut(),"Restart restores countdown");
+ for(int level=0;level<2;++level){
+  g.reset(level);check(g.jumpPads().size()==1,"Each map has a jump pad");
+  const auto pad=g.jumpPads()[0].position;g.warpPlayer(pad);g.update(.01F,{});
+  check(g.player().velocity.y>14&&!g.player().grounded,"Standing on pad launches automatically");
+  check(g.liveParticleCount()==20&&g.particles()[0].kind==relay::ParticleKind::Ray&&g.particles()[0].velocity.y>5,"Pad emits upward launch streaks");
+  float peak=0;for(int i=0;i<90;++i){g.update(1.F/120,{});peak=std::max(peak,g.player().position.y-pad.y);}
+  check(peak>4&&peak<4.5F,"Pad jumps higher without holding Space");
+  check(g.jumpPads()[0].pulse==0,"Pad feedback decays in flight");
+  check(g.liveParticleCount()==0,"Launch plume and trail expire without filling the pool");
+  bool bounced=false;for(int i=0;i<120;++i){g.update(1.F/120,{});if(g.player().velocity.y>14){bounced=true;break;}}
+  check(bounced,"Landing on pad triggers another bounce");
+  g.reset(level);g.warpPlayer(g.jumpPads()[0].position+glm::vec3(0,2,0));g.update(.05F,{});
+  check(g.player().velocity.y<0&&g.jumpPads()[0].pulse==0,"Passing above pad does not trigger it");
+  g.reset(level);check(g.jumpPads()[0].pulse==0&&g.jumpPads()[0].cooldown==0,"Restart resets pad");
+ }
+ g.reset(0);advance(g,4.1F);
+ g.warpPlayer(g.jumpPads()[0].position);g.update(.01F,{});advance(g,.12F);
+ g.warpPlayer({14,1,13});g.update(.01F,{});
+ check(g.liveParticleCount()>=50&&g.liveParticleCount()<=int(g.particles().size()),"Overlapping pad and hit bursts keep their particles");
+ g.warpPlayer({8,1,25});advance(g,1.2F);check(g.liveParticleCount()==0,"Overlapping particles fully recycle");
  g.reset(0); auto start=g.player().position;relay::Input move;move.movement={0,1};advance(g,.5F,move);check(glm::distance(start,g.player().position)>1,"WASD movement");
  g.reset(0); relay::Input jump;jump.jumpPressed=jump.jumpHeld=true;advance(g,.25F,jump);check(g.player().position.y>2,"Jump");advance(g,1);check(g.player().grounded,"Landing");
  g.reset(0);relay::Input crouch;crouch.crouchPressed=true;g.update(.01F,crouch);advance(g,.1F);check(g.player().crouching,"Toggle crouch must persist");
@@ -29,14 +85,76 @@ int main(){try{
   for(int i=0;i<3;++i){
    g.warpPlayer(cores[i].position-glm::vec3(0,.8F,0));advance(g,.05F);
    check(g.availableInteraction()==relay::Interaction::Core,"Core interaction offered");
-   advance(g,.45F,use);check(g.collectedCount()==i+1,"Core collected once");
-   advance(g,.45F,use);check(g.collectedCount()==i+1,"Duplicate pickup ignored");
+   advance(g,.45F,use);check(g.collectedCount()==i+1,"Core collected once");check(g.liveParticleCount()>0,"Core pickup emits sparks");
+   advance(g,.45F,use);check(g.collectedCount()==i+1,"Duplicate pickup ignored");advance(g,.4F);check(g.liveParticleCount()==0,"Pickup burst expires without duplicate emission");
   }
   check(g.gateUnlocked(),"All cores unlock gate");advance(g,1);check(g.gateOpen()>.98F,"Door opens fully");
   g.warpPlayer(gate+glm::vec3(0,0,2));advance(g,.05F);relay::Input exit;exit.movement={0,-1};advance(g,1,exit);
   check(g.state()==relay::RunState::Won,"Walk through open door to complete");
+  const float finishTime=g.elapsed(),finishRemaining=g.timeRemaining();advance(g,1);check(g.elapsed()==finishTime&&g.timeRemaining()==finishRemaining,"Completion freezes clock");
   g.reset(level);check(g.collectedCount()==0&&!g.gateUnlocked()&&g.gateOpen()==0&&g.state()==relay::RunState::Playing,"Restart clears progress");
  }
  g.reset(0);g.warpPlayer({14.8F,1,23});check(g.nearestCore()<0,"Core cannot be collected through low block");
+ // ---- Helios Yard (synced from the full edition's Level 1) ----
+ {
+  relay::Game y; y.reset(relay::Game::heliosLevel);
+  check(y.level()==relay::Game::heliosLevel&&std::string(y.levelName())=="HELIOS YARD","Helios Yard loads as level 3");
+  check(y.cores().size()==7&&y.doors().size()==17&&y.plates().size()==19&&y.traps().size()==48&&y.movers().size()==6&&y.portals().size()==1&&y.jumpPads().size()==1,"Helios Yard pieces");
+  check(y.timedLevel()&&y.timeRemaining()==600&&y.wordless(),"Helios Yard: 10-minute mission without HUD words");
+  check(y.gatePosition()==glm::vec3(46,1,6)&&y.room().max.x==88,"Helios Yard room and exit");
+  advance(y,.2F);check(y.player().grounded&&!y.playerIntersectsScene()&&y.player().health==5,"Helios spawn is clear");
+  // Materials and floor paint arrive in the voxel world.
+  int special=0;for(int z=4;z<88;++z)for(int x=4;x<88;++x)for(int h=0;h<12;++h){const auto m=y.world().cell(x,h,z);if(m>=4&&m<=8)++special;}
+  check(special>1000,"Guide, beacon, sandstone and slate materials load");
+  // Pressure plates unlock their doors for good, on the ground and on upper floors.
+  const auto plate=y.plates()[0];const auto& door=y.doors()[std::size_t(plate.door)];
+  check(!door.unlocked&&door.open==0,"Door starts sealed");
+  y.warpPlayer(plate.position);advance(y,.6F);
+  check(y.doors()[std::size_t(plate.door)].unlocked&&y.doors()[std::size_t(plate.door)].open>.99F,"Plate unlocks its door");
+  y.warpPlayer(y.spawnPoint());advance(y,30);check(y.doors()[std::size_t(plate.door)].open>.99F,"Door stays open for good");
+  int upper=-1;for(std::size_t i=0;i<y.plates().size();++i)if(y.plates()[i].position.y>1.5F)upper=int(i);
+  check(upper>=0,"An upper-floor plate exists");
+  const auto high=y.plates()[std::size_t(upper)];check(y.doors()[std::size_t(high.door)].centre.y>2.5F,"Its door is on an upper floor");
+  y.warpPlayer(high.position);advance(y,.6F);check(y.doors()[std::size_t(high.door)].unlocked,"Upper plate unlocks its upper door");
+  // Portals: wake both ends with E, then step in to cross.
+  relay::Input use;use.interactPressed=true;
+  const auto link=y.portals()[0];
+  y.warpPlayer(link.from+glm::vec3(1.1F,0,0));advance(y,.1F);check(y.availableInteraction()==relay::Interaction::Portal,"Portal end offers activation");
+  advance(y,.5F,use);check(y.portals()[0].fromOn&&!y.portals()[0].linked(),"First end wakes");
+  y.warpPlayer(link.to+glm::vec3(1.1F,0,0));advance(y,.1F);advance(y,.5F,use);check(y.portals()[0].linked(),"Both ends link");
+  advance(y,1.2F);y.warpPlayer(link.from);advance(y,.1F);
+  check(y.teleports()==1&&glm::distance(glm::vec2(y.player().position.x,y.player().position.z),glm::vec2(link.to.x,link.to.z))<.1F,"Stepping in crosses to the pair");
+  advance(y,.5F);check(y.teleports()==1,"Arrival end waits until stepped off");
+  // Restart seals the doors and puts the portals to sleep again.
+  y.reset(relay::Game::heliosLevel);check(!y.doors()[0].unlocked&&!y.portals()[0].fromOn&&y.teleports()==0,"Restart resets Helios Yard");
+  // Electric floor plates hurt only feet on the plate.
+  relay::Game t;t.reset(relay::Game::heliosLevel);
+  const auto& trap=t.traps()[0];std::size_t ti=0;
+  while(t.trapPhase(ti)!=relay::TrapPhase::Active)advance(t,.05F);
+  t.warpPlayer({trap.area.min.x+.5F,1,trap.area.min.z+.5F});t.update(.01F,{});check(t.player().health==4,"Live shock plate hurts");
+ }
+ // Shift sprint is faster than a run, and crouching cancels it.
+ {
+  relay::Game a,b;a.reset(0);b.reset(0);relay::Input run;run.movement={0,1};relay::Input dash=run;dash.sprintHeld=true;
+  const auto a0=a.player().position,b0=b.player().position;advance(a,.4F,run);advance(b,.4F,dash);
+  check(glm::distance(b0,b.player().position)>glm::distance(a0,a.player().position)*1.35F&&b.player().sprinting,"Shift sprint is faster");
+  relay::Input crouchDash=dash;crouchDash.crouchHeld=true;advance(b,.1F,crouchDash);check(!b.player().sprinting,"Crouch stops the sprint");
+ }
+ // Ground dust: footfalls while running, a puff at take-off, a ring on landing; all of it settles.
+ {
+  const auto dust=[](const relay::Game& g){int n=0;for(const auto& p:g.particles())if(p.remaining>0&&p.kind==relay::ParticleKind::Dust)++n;return n;};
+  relay::Game d;d.reset(0);relay::Input run;run.movement={0,1};
+  int most=0;for(int i=0;i<60;++i){d.update(1.F/120,run);most=std::max(most,dust(d));}
+  check(most>0,"Running kicks up dust at the feet");
+  for(const auto& p:d.particles())if(p.remaining>0&&p.kind==relay::ParticleKind::Dust)check(p.position.y>1.02F&&p.position.y<1.6F,"Dust stays low above the floor");
+  advance(d,1);check(dust(d)==0,"Step dust settles");
+  d.reset(0);advance(d,.2F);relay::Input hop;hop.jumpPressed=hop.jumpHeld=true;d.update(1.F/120,hop);
+  check(dust(d)>=5,"Take-off puff");
+  advance(d,1);d.warpPlayer({8,4,25});advance(d,.05F);const int before=dust(d);
+  bool landed=false;int ring=0;for(int i=0;i<120&&!landed;++i){d.update(1.F/120,{});if(d.player().grounded){landed=true;ring=dust(d);}}
+  check(landed&&ring>=before+8,"Landing ring of dust");
+  advance(d,1);check(dust(d)==0,"Landing dust settles");
+  d.reset(0);advance(d,2);check(dust(d)==0,"Standing still makes no dust");
+ }
  std::cout<<"Lite: movement, jump/land, toggle/headroom/tunnel, interaction, spike timing/height/cooldown, moving collision and reset passed.\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;} }

@@ -10,7 +10,7 @@
 
 namespace relay {
 namespace {
-struct Vertex { glm::vec3 p, n; glm::vec2 uv; glm::vec3 tangent, colour; };
+struct Vertex { glm::vec3 p, n; glm::vec2 uv; glm::vec3 tangent, colour; float surface=0; };
 const std::array<glm::ivec3, 6> directions{{{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}}};
 void face(std::vector<Vertex>& vertices, glm::vec3 centre, glm::vec3 normal, glm::vec3 colour) {
   const auto tangent = std::abs(normal.y) > .5F ? glm::vec3(1,0,0) : glm::normalize(glm::cross(glm::vec3(0,1,0), normal));
@@ -29,6 +29,8 @@ void meshAttributes(unsigned vao, unsigned vertices, unsigned instances, std::si
     glEnableVertexAttribArray(i);
     glVertexAttribPointer(i, i==2?2:3, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsets[i]));
   }
+  glEnableVertexAttribArray(11);
+  glVertexAttribPointer(11,1,GL_FLOAT,GL_FALSE,sizeof(Vertex),reinterpret_cast<void*>(offsetof(Vertex,surface)));
   glBindBuffer(GL_ARRAY_BUFFER, instances);
   for (unsigned i=0; i<4; ++i) {
     glEnableVertexAttribArray(5+i);
@@ -43,13 +45,13 @@ void meshAttributes(unsigned vao, unsigned vertices, unsigned instances, std::si
   glBindVertexArray(0);
 }
 unsigned texture(const std::vector<unsigned char>& data) {
-  unsigned id; glGenTextures(1,&id); glBindTexture(GL_TEXTURE_2D,id);
-  glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,64,64,0,GL_RGB,GL_UNSIGNED_BYTE,data.data());
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
-  glGenerateMipmap(GL_TEXTURE_2D); return id;
+  unsigned id; glGenTextures(1,&id); glBindTexture(GL_TEXTURE_2D_ARRAY,id);
+  glTexImage3D(GL_TEXTURE_2D_ARRAY,0,GL_RGB8,64,64,5,0,GL_RGB,GL_UNSIGNED_BYTE,data.data());
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_WRAP_S,GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D_ARRAY,GL_TEXTURE_WRAP_T,GL_REPEAT);
+  glGenerateMipmap(GL_TEXTURE_2D_ARRAY); return id;
 }
 // Shared bevelled primitive: six face panels, twelve edge strips and eight corners.
 // Voxel terrain stays cubic; articulated parts gain a readable machined silhouette.
@@ -104,10 +106,7 @@ std::vector<Vertex> roundPrimitive(bool cylinder,int slices=24,int stacks=14) {
   }
   return v;
 }
-float heightAt(int x, int y) {
-  x = (x+64)%64; y = (y+64)%64;
-  return (x<1 || y<1 ? -.055F : .0F) + .002F*std::sin(float(x)*.8F)*std::sin(float(y)*.6F);
-}
+
 }
 
 Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), craft::core::assetPath("shaders/relay.frag")),
@@ -129,13 +128,34 @@ Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), cra
   glBindBuffer(GL_ARRAY_BUFFER,terrainInstance_); glBufferData(GL_ARRAY_BUFFER,sizeof(Instance),&identity,GL_STATIC_DRAW);
   meshAttributes(cubeVao_,cubeBuffer_,instanceBuffer_);
   meshAttributes(terrainVao_,terrainBuffer_,terrainInstance_);
-  std::vector<unsigned char> colour(64*64*3), normals(colour.size());
-  for (int y=0; y<64; ++y) for(int x=0; x<64; ++x) {
-    const int i=(y*64+x)*3;
-    const int value = x<1||y<1 ? 156 : 242+(x*13+y*7)%5;
-    for(int c=0;c<3;++c) colour[std::size_t(i+c)] = static_cast<unsigned char>(value);
-    const auto n=glm::normalize(glm::vec3(-(heightAt(x+1,y)-heightAt(x-1,y))*5, -(heightAt(x,y+1)-heightAt(x,y-1))*5,1));
-    for(int c=0;c<3;++c) normals[std::size_t(i+c)] = static_cast<unsigned char>((n[c]*.5F+.5F)*255);
+  std::vector<unsigned char> colour(64*64*3*5), normals(colour.size());
+  const auto height=[](int material,int x,int y) {
+   x=(x+64)%64;y=(y+64)%64;
+   const float edge=float(std::min({x,64-x,y,64-y}));
+   const float bevel=std::clamp(edge/3.F,0.F,1.F);
+   const float seam=-.022F*(1-bevel)*(1-bevel);
+   if(material==0)return seam; // clean ceramic, shallow panel joint
+   if(material==1){ // raised staggered tread, with broad plate seams
+    const int row=y/16,xx=(x+(row%2)*8)%16,yy=y%16;
+    const float ridge=(xx>3&&xx<12&&yy>5&&yy<10)?.010F:0.F;
+    return seam+ridge;
+   }
+   if(material==2)return seam*.35F+.0012F*std::sin(float(y)*3.14159265F*.5F); // brushed alloy
+   if(material==3)return -.008F*((x%8<2||y%8<2)?1.F:0.F); // rubber grid
+   return seam*.5F+.0007F*std::sin(float(x)*.785398F)*std::sin(float(y)*.785398F); // painted casing
+  };
+  for(int material=0;material<5;++material)for(int y=0;y<64;++y)for(int x=0;x<64;++x) {
+   const int i=((material*64+y)*64+x)*3;
+   const float edge=float(std::min({x,64-x,y,64-y}));
+   const float noise=float((x*13+y*7)%5)/255.F;
+   float base=.98F;
+   if(material==0)base=edge<1?.65F:.98F-noise*.3F;
+   if(material==1)base=edge<1?.48F:.83F+height(material,x,y)*6+noise;
+   if(material==2)base=.85F+.07F*std::sin(float(y)*1.570796F)+noise;
+   if(material==3)base=(x%8<2||y%8<2)?.57F:.83F+noise;
+   if(material==4)base=edge<1?.7F:.95F-noise;
+   const auto n=glm::normalize(glm::vec3(-(height(material,x+1,y)-height(material,x-1,y))*32,-(height(material,x,y+1)-height(material,x,y-1))*32,1));
+   for(int c=0;c<3;++c){colour[std::size_t(i+c)]=static_cast<unsigned char>(std::clamp(base,0.F,1.F)*255);normals[std::size_t(i+c)]=static_cast<unsigned char>((n[c]*.5F+.5F)*255);}
   }
   albedo_=texture(colour); normal_=texture(normals);
   instances_.reserve(1024);
@@ -155,17 +175,30 @@ void Renderer::rebuildTerrain(const Game& game, bool optimised, bool whitebox) {
     glm::vec3 colour = y==0 ? glm::vec3(.65F,.71F,.72F) : glm::vec3(.83F,.86F,.85F);
     if (!whitebox) colour = y==0 ? glm::vec3(.36F,.39F,.40F) : glm::vec3(.84F,.83F,.78F);
     if (material==3) colour = whitebox ? glm::vec3(.72F,.73F,.64F) : glm::vec3(.63F,.65F,.63F);
+    // Guidance and district materials from the full edition (LevelData::Guide..Slate), on walls or
+    // painted on the floor. The fraction of the surface index is a faint self-glow, so guide trim
+    // and beacons still read in shadow.
+    float surface=y==0?2.F:y==1?4.F:1.F,glow=0;
+    const bool special=material>=4&&material<=8;
+    if(material==4){colour={.90F,.70F,.46F};surface=5;glow=.12F;}       // soft amber guide trim
+    if(material==5){colour={.34F,.84F,.98F};surface=5;glow=.45F;}       // cyan beacon
+    if(material==6){colour={.46F,.58F,.60F};surface=5;glow=.04F;}       // faint shortcut mark
+    if(material==7){colour={.88F,.77F,.60F};surface=1;}                  // sandstone
+    if(material==8){colour={.42F,.47F,.54F};surface=3;}                  // slate
     for(auto n: directions) {
       const bool exposed = world.cell(x+n.x,y+n.y,z+n.z)==0;
       if(exposed) ++stats_.visibleFaces;
       if(!optimised || exposed) {
         auto c=colour;
-        if(!whitebox) {
-          if(y==0&&((x/4+z/4)%2)) c*=.83F;
+        if(!whitebox&&!special) {
+          if(y==0) c={.25F,.30F,.34F};
+          if(y==0&&(x==7||x==32))c={.38F,.48F,.51F};
           if(y>0&&y==1&&material==2) c={.18F,.21F,.23F};
-          if(y>0&&material==2&&(x%7==0||z%7==0)) c*=.8F;
+          if(y>1&&material==2&&(x%8==0||z%8==0)) c={.43F,.48F,.50F};
         }
+        if(special&&(material==7||material==8)&&y>0&&(x%7==0||z%7==0)) c*=.88F;
         face(vertices,glm::vec3(x+.5F,y+.5F,z+.5F),glm::vec3(n),c);
+        for(std::size_t v=vertices.size()-6;v<vertices.size();++v)vertices[v].surface=surface+glow;
       }
     }
   }
@@ -184,7 +217,6 @@ void Renderer::prepare(const Game& game, const RenderOptions& options, float gal
   else if(options.gallery) models_.append(game,instances_);
   else models_.append(game,instances_,options.wakeTime);
   playerPosition_=game.player().position;
-  lightCount_=0; if(!options.menu&&!options.gallery) gatherLights(game);
   const auto group=[](const Instance& i) { return int(i.blend)*primitives+int(i.primitive); };
   std::stable_sort(instances_.begin(),instances_.end(),[&](const auto& a,const auto& b) { return group(a)<group(b); });
   instanceCount_.fill(0); for(const auto& i:instances_) ++instanceCount_[std::size_t(group(i))];
@@ -212,7 +244,7 @@ void Renderer::drawMenuBackground(int width, int height, float time) {
 void Renderer::draw(int width, int height, const RenderOptions& options, const FollowCamera& camera) {
   const float aspect=float(width)/float(height);
   glm::vec3 eye=camera.eye();
-  glm::vec3 fog(.28F,.34F,.38F); float fogDensity=.006F;
+  glm::vec3 fog(.07F,.10F,.16F); float fogDensity=.002F;
   if(options.customView) {
     eye=options.viewEye;
     viewProjection_=glm::perspective(glm::radians(50.F),aspect,.1F,300.F)*glm::lookAt(eye,options.viewTarget,{0,1,0});
@@ -253,27 +285,24 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
     }
     viewProjection_=glm::perspective(glm::radians(58.F),aspect,.06F,100.F)*glm::lookAt(eye,target,{0,1,0});
   } else {
-    viewProjection_=glm::perspective(glm::radians(camera.fov()),aspect,.06F,100.F)*glm::lookAt(eye,camera.target(),camera.up());
+    viewProjection_=glm::perspective(glm::radians(camera.fov()),aspect,.06F,180.F)*glm::lookAt(eye,camera.target(),camera.up());
   }
   glViewport(0,0,width,height);
-  if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.22F,.27F,.30F,1);
+  if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.025F,.04F,.065F,1);
   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
   skybox_.draw(viewProjection_);
   glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDisable(GL_BLEND);
   shader_.use(); shader_.setMat4("uViewProjection",viewProjection_); shader_.setVec3("uEye",eye);
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);
+  shader_.setInt("uNormalCompare",options.normalCompare?1:0);
+  shader_.setFloat("uNormalStrength",options.normalStrength);shader_.setFloat("uSplitX",float(width)*.5F);
   shader_.setVec3("uFogColour",fog); shader_.setFloat("uFogDensity",fogDensity);
   // The camera may pass the map edge (see FollowCamera): cut away the boundary wall it is behind.
   const bool cutaway=!options.gallery&&!options.menu&&sceneGame_;
   shader_.setInt("uCutaway",cutaway?1:0);
   if(cutaway) { const Bounds room=sceneGame_->room(); shader_.setVec4("uRoom",glm::vec4(room.min.x,room.min.z,room.max.x,room.max.z)); }
-  shader_.setInt("uLightCount",lightCount_);
-  for(int i=0;i<lightCount_;++i) {
-    const std::string index="["+std::to_string(i)+"]";
-    shader_.setVec4("uLightPosition"+index,lightPosition_[std::size_t(i)]); shader_.setVec4("uLightColour"+index,lightColour_[std::size_t(i)]);
-  }
-  glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D,albedo_);
-  glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D,normal_);
+  glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D_ARRAY,albedo_);
+  glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D_ARRAY,normal_);
   if(!options.gallery&&!options.menu) { glBindVertexArray(terrainVao_); glDrawArraysInstanced(GL_TRIANGLES,0,terrainVertices_,1); }
   for(int i=0;i<groups;++i) if(instanceCount_[i]) {
     // Soft effects test against the scene but never hide each other.
@@ -285,12 +314,22 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
   glDepthMask(GL_TRUE); glDisable(GL_BLEND);
   glBindVertexArray(0); glActiveTexture(GL_TEXTURE0);
 }
-void Renderer::gatherLights(const Game& game) {
-  // Candidate lights carry (position, radius) and (colour, intensity); the strongest are kept.
-  struct Light { glm::vec4 position, colour; float weight; };
-  std::vector<Light> lights;
-  const auto add=[&](glm::vec3 p,float radius,glm::vec3 colour,float intensity) { if(intensity>.03F) lights.push_back({{p,radius},{colour,intensity},intensity*radius}); };
-  for(std::size_t i=0;i<game.traps().size();++i) if(game.trapPhase(i)==TrapPhase::Warning)
-    add((game.traps()[i].area.min+game.traps()[i].area.max)*.5F,2.F,{1,.6F,.15F},.3F);
+glm::vec3 Renderer::projectToEdge(glm::vec3 point,float width,float height,float margin,float top) const {
+  // Screen position of a world point, pinned inside the margins when it is off screen or behind
+  // the camera; z is 1 when the point is on screen.
+  const auto p=viewProjection_*glm::vec4(point,1);
+  const bool behind=p.w<=1e-4F;
+  glm::vec2 ndc=glm::vec2(p.x,p.y)/std::max(std::abs(p.w),1e-4F);
+  if(behind) ndc=-ndc*1000.F;
+  glm::vec2 screen((ndc.x*.5F+.5F)*width,(.5F-ndc.y*.5F)*height);
+  const glm::vec2 lo(margin,top),hi(width-margin,height-margin);
+  const bool inside=!behind&&screen.x>=lo.x&&screen.x<=hi.x&&screen.y>=lo.y&&screen.y<=hi.y;
+  if(!inside) {
+    const glm::vec2 c=(lo+hi)*.5F; glm::vec2 d=screen-c;
+    if(glm::length(d)<1.F) d={0,1};
+    const float sx=std::abs(d.x)>1e-6F?((d.x>0?hi.x:lo.x)-c.x)/d.x:1e9F,sy=std::abs(d.y)>1e-6F?((d.y>0?hi.y:lo.y)-c.y)/d.y:1e9F;
+    screen=c+d*std::min(sx,sy);
+  }
+  return {screen,inside?1.F:0.F};
 }
 } // namespace relay

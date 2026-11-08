@@ -30,16 +30,9 @@ glm::vec3 FollowCamera::up() const {
 void FollowCamera::update(const Game& game,float dt) {
   const auto& a=game.player().motion;
   const bool lost=game.state()==RunState::Lost;
-  // Impacts: hits punch the view outward along the knockback, pickups punch it in,
-  // heavy landings drop it, shutdown does all of it harder.
-  // Every hit restarts hitAge, so chained hits on different hazards each kick the view.
-  if(a.hitAge<lastHitAge_&&a.hitAge<.1F) {
-    // Blunt blows land heavy and low; shocks are lighter but buzz (below).
-    const bool electric=a.hitKind==1;
-    trauma_+=electric?.3F:.85F; fovVelocity_+=electric?35.F:80.F;
-    const glm::vec2 push=game.player().knockback;
-    kickVelocity_+=(glm::length(push)>.01F?glm::vec3(push.x,0,push.y)/glm::length(push)*(electric?3.F:7.5F):glm::vec3(0))+glm::vec3(0,electric?1.5F:-4.5F,0);
-  }
+  // Lite damage: one small ~0.14-second shake, without lens zoom or a dolly kick.
+  // Cap rather than accumulate so simultaneous hazards cannot amplify it.
+  if(a.hitAge<lastHitAge_&&a.hitAge<.1F) trauma_=std::max(trauma_,.25F);
   if(a.celebrateAge<lastCelebrate_&&a.celebrateAge<.2F) { trauma_+=.42F; fovVelocity_-=85.F; kickVelocity_.y+=2.6F; }
   // Movement weight: every landing drops the view, take-off lifts it, footfalls bob and sway it.
   if(a.landAge<lastLandAge_) { kickVelocity_.y-=1.5F+2.6F*a.landStrength; if(a.landStrength>.9F) trauma_+=.32F*(a.landStrength-.6F); }
@@ -92,7 +85,7 @@ void FollowCamera::update(const Game& game,float dt) {
   // The rest of a jet boost keeps the view shaking a little.
   if(game.jetting()) trauma_=std::max(trauma_,.22F);
   lastStepAge_=a.stepAge; lastLaunchAge_=a.launchAge; lastSlideAge_=a.slideAge; lastPopAge_=a.popAge; lastBoostAge_=a.boostAge; lastBounceAge_=a.bounceAge;
-  if(lost&&!wasLost_) { trauma_+=1.F; fovVelocity_+=110.F; kickVelocity_.y-=5.F; }
+  // Fatal hits use the same small shake; timeout adds no camera impulse.
   if(lost&&a.slapAge<lastSlap_&&a.slapAge<.1F) { trauma_+=.4F; kickVelocity_.y-=4.5F; }
   lastSlap_=a.slapAge;
   lastHurt_=game.player().hurtCooldown; lastHitAge_=a.hitAge; lastLandAge_=a.landAge; lastCelebrate_=a.celebrateAge; wasLost_=lost;

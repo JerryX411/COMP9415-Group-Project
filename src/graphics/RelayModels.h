@@ -16,7 +16,7 @@ enum class Blend : int { Opaque, Alpha, Additive };
 struct Instance {
   glm::mat4 transform{1.0F};
   glm::vec4 colour{1.0F};
-  // x: metal, y: emission, z: specular strength, w: texture repetition.
+  // x: metal, y: emission, z: specular strength, w: material surface (1 ceramic, 2 tread, 3 alloy, 4 rubber, 5 paint).
   // Emission above 1 is unlit glow; x then softens sphere edges instead.
   glm::vec4 material{0.0F, 0.0F, .12F, 1.0F};
   Primitive primitive = Primitive::Box;

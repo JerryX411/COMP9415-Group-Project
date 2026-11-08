@@ -12,6 +12,6 @@ Files:
 
 Drawing order is clear, skybox, existing opaque/transparent scene, then UI. The skybox does not write depth, and restores the caller's depth/culling/blending, shader, VAO and texture state. It does not supply ambient illumination, change voxel storage, or implement ray tracing.
 
-Build/run with `BuildAndRun.cmd`. Check the title, settings, both levels, mouse orbit, pause/resume and restart. Menu backgrounds should show the sky around the local panels. Geometry and HUD must remain in front. The gameplay camera can look upward to inspect the sky. The bundled source is low resolution; blur/detail limits are asset limits.
+Build/run with `BuildAndRun.cmd`. Check the title, settings, all three levels, mouse orbit, pause/resume and restart. Menu backgrounds should show the sky around the local panels. Geometry and HUD must remain in front. The gameplay camera can look upward to inspect the sky. The bundled source is low resolution; blur/detail limits are asset limits.
 
-When benchmarking the final game, include skybox rendering in the measured scene boundary and use identical sky settings in both baseline and optimised runs. No benchmark integration is added by this change.
+When benchmarking the final game, include skybox rendering in the measured scene boundary and use identical sky settings in both baseline and optimised runs. The current benchmark draws the cubemap in both modes; earlier measurements made with a different background must be rerun.

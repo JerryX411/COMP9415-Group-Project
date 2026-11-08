@@ -6,17 +6,17 @@
 
 namespace relay {
 namespace {
-constexpr const char* ids[KeyBindings::count]{"forward", "back", "left", "right", "jump", "crouch", "interact", "restart"};
-constexpr const char* names[KeyBindings::count]{"MOVE FORWARD", "MOVE BACK", "MOVE LEFT", "MOVE RIGHT", "JUMP", "CROUCH", "INTERACT", "RESTART LEVEL"};
+constexpr const char* ids[KeyBindings::count]{"forward", "back", "left", "right", "jump", "crouch", "interact", "restart", "sprint"};
+constexpr const char* names[KeyBindings::count]{"MOVE FORWARD", "MOVE BACK", "MOVE LEFT", "MOVE RIGHT", "JUMP", "CROUCH", "INTERACT", "RESTART LEVEL", "SPRINT"};
 }
 
 std::array<int, KeyBindings::count> KeyBindings::defaults() {
-  return {GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D, GLFW_KEY_SPACE, GLFW_KEY_C, GLFW_KEY_E, GLFW_KEY_R};
+  return {GLFW_KEY_W, GLFW_KEY_S, GLFW_KEY_A, GLFW_KEY_D, GLFW_KEY_SPACE, GLFW_KEY_C, GLFW_KEY_E, GLFW_KEY_R, GLFW_KEY_LEFT_SHIFT};
 }
 
 bool KeyBindings::reserved(int key) {
   return key == GLFW_KEY_ESCAPE || key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER || key == GLFW_KEY_F1 ||
-         key == GLFW_KEY_F2 || key == GLFW_KEY_F3 || key == GLFW_KEY_1 || key == GLFW_KEY_2;
+         key == GLFW_KEY_F2 || key == GLFW_KEY_F3 || (key >= GLFW_KEY_F4 && key <= GLFW_KEY_F6) || key == GLFW_KEY_1 || key == GLFW_KEY_2;
 }
 
 bool KeyBindings::assign(KeyAction action, int key) {
@@ -107,7 +107,7 @@ const std::vector<int>& KeyBindings::supportedKeys() {
     for (int k = GLFW_KEY_0; k <= GLFW_KEY_9; ++k) list.push_back(k);
     for (int k = GLFW_KEY_F1; k <= GLFW_KEY_F12; ++k) list.push_back(k);
     for (int k = GLFW_KEY_KP_0; k <= GLFW_KEY_KP_9; ++k) list.push_back(k);
-    for (int k : {GLFW_KEY_SPACE, GLFW_KEY_RIGHT_SHIFT, GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_CONTROL,
+    for (int k : {GLFW_KEY_SPACE, GLFW_KEY_LEFT_SHIFT, GLFW_KEY_RIGHT_SHIFT, GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_CONTROL,
                   GLFW_KEY_LEFT_ALT, GLFW_KEY_RIGHT_ALT, GLFW_KEY_TAB, GLFW_KEY_CAPS_LOCK, GLFW_KEY_BACKSPACE, GLFW_KEY_ENTER,
                   GLFW_KEY_KP_ENTER, GLFW_KEY_ESCAPE, GLFW_KEY_UP, GLFW_KEY_DOWN, GLFW_KEY_LEFT, GLFW_KEY_RIGHT, GLFW_KEY_INSERT,
                   GLFW_KEY_DELETE, GLFW_KEY_HOME, GLFW_KEY_END, GLFW_KEY_PAGE_UP, GLFW_KEY_PAGE_DOWN, GLFW_KEY_APOSTROPHE,

@@ -4,6 +4,7 @@ layout(location=1) in vec3 aNormal;
 layout(location=2) in vec2 aUv;
 layout(location=3) in vec3 aTangent;
 layout(location=4) in vec3 aColour;
+layout(location=11) in float aSurface;
 layout(location=5) in mat4 iModel;
 layout(location=9) in vec4 iColour;
 layout(location=10) in vec4 iMaterial;
@@ -12,6 +13,7 @@ out vec3 vPosition, vNormal, vTangent, vColour;
 out vec2 vUv;
 out float vAlpha;
 flat out vec4 vMaterial;
+flat out float vSurface;
 void main() {
   vec4 world=iModel*vec4(aPosition,1.0);
   vPosition=world.xyz;
@@ -19,7 +21,8 @@ void main() {
   vTangent=normalize(mat3(iModel)*aTangent);
   vColour=aColour*iColour.rgb;
   vAlpha=iColour.a;
-  vUv=aUv*iMaterial.w;
+  vUv=aUv;
+  vSurface=aSurface>0.5?aSurface:iMaterial.w;
   vMaterial=iMaterial;
   gl_Position=uViewProjection*world;
 }

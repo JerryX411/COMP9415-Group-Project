@@ -8,6 +8,8 @@
 namespace relay {
 struct RenderOptions {
   bool normalMapping = true, optimised = true, whitebox = false;
+  bool normalCompare=false;
+  float normalStrength=1.F;
   bool gallery = false, diagnostics = false;
   bool menu = false, overview = false;
   bool collisionOverlay = false;
@@ -34,14 +36,12 @@ class Renderer {
   // Menu background only; does not rebuild terrain or restore the old robot showroom.
   void drawMenuBackground(int width, int height, float time);
   glm::vec2 project(glm::vec3 point, float width, float height) const;
+  // Like project(), but pinned inside the screen margins (top: the band kept clear for the HUD);
+  // z is 1 on screen, 0 when pinned to the edge.
+  glm::vec3 projectToEdge(glm::vec3 point, float width, float height, float margin, float top) const;
   const RenderStats& stats() const { return stats_; }
  private:
   void rebuildTerrain(const Game& game, bool optimised, bool whitebox);
-  // Effects light the scene: flashes, fireballs, arcs, pillars, cores and live traps.
-  void gatherLights(const Game& game);
-  static constexpr int maxLights = 12;
-  std::array<glm::vec4,maxLights> lightPosition_{}, lightColour_{};
-  int lightCount_ = 0;
   craft::graphics::Shader shader_;
   Skybox skybox_;
   SceneModels models_;
