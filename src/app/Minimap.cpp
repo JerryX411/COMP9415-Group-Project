@@ -125,7 +125,7 @@ bool MinimapCircle::overlaps(ImVec2 point,float padding) const {
   return radius>0 && lengthSquared({point.x-centre.x,point.y-centre.y})<r*r;
 }
 
-MinimapCircle drawHeliosMinimap(ImDrawList& draw,const relay::Game& game,
+MinimapCircle drawYardMinimap(ImDrawList& draw,const relay::Game& game,
                                ImVec2 display,float scale) {
   if(scale<=0)return {};
   const float radius=106.F*scale;

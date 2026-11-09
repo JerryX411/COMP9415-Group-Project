@@ -23,7 +23,7 @@ int runLiteBenchmark(int level,const std::string& output) {
  if(!output.empty()){file.open(output);if(!file)throw std::runtime_error("Cannot write benchmark CSV: "+output);}
  std::ostream& report=output.empty()?std::cout:file;
  report<<"# GPU: "<<glGetString(GL_RENDERER)<<"; OpenGL: "<<glGetString(GL_VERSION)<<"\n";
- report<<"# Frozen: level="<<level<<"; world=64x64x64; pad launch after 24 steps at 1/120s; eye=20,17,38; target=20,1,19; FOV=50; near=0.1; far=300; normal_strength=1; skybox and particles included\n";
+ report<<"# Frozen: level="<<level<<"; world=96x96x96; pad launch after 24 steps at 1/120s; eye=20,17,38; target=20,1,19; FOV=50; near=0.1; far=300; normal_strength=1; skybox and particles included\n";
  report<<"repeat,mode,width,height,warmup,measured,mean_ms,triangles,draw_calls,solid_voxels,exposed_faces,particles\n";
  // Alternate order to reduce systematic warm-up/order bias; each row gets its own warm-up.
  for(int repeat=0;repeat<3;++repeat)for(int pass=0;pass<2;++pass){

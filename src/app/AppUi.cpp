@@ -90,6 +90,31 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
     cell(x+16*s+std::cos(angle)*travel,y+10*s+std::sin(angle)*travel+hitAge*hitAge*100*s,7*s,4*s,withAlpha(danger,fade));}
   }
  }
+ {
+  // Lives: little robot heads under the armour (the one just lost flashes red). The tutorial
+  // yard never runs out: one head and an infinity sign.
+  const float ly=96*s;
+  const auto head=[&](ImVec2 c,ImU32 colour,bool filled){
+   if(filled)d->AddCircleFilled(c,11*s,withAlpha(colour,.18F),20);
+   d->AddCircle(c,11*s,colour,20,2*s);
+   for(float e:{-1.F,1.F})d->AddRectFilled({c.x+e*4.5F*s-2*s,c.y-3*s},{c.x+e*4.5F*s+2*s,c.y+3*s},colour);
+  };
+  const auto live=[&](ImVec2 c){d->AddCircleFilled(c,15*s,withAlpha(glowCyan,.22F),20);head(c,glowCyan,true);};
+  if(!game.livesLimited()) {
+   live({56*s,ly});
+   ImVec2 inf[48];const ImVec2 ic(94*s,ly);
+   for(int i=0;i<48;++i){const float a=float(i)*6.2831853F/48,dd=1+std::sin(a)*std::sin(a);inf[i]={ic.x+16*s*std::cos(a)/dd,ic.y+16*s*std::sin(a)*std::cos(a)/dd};}
+   d->AddPolyline(inf,48,glowCyan,ImDrawFlags_Closed,2.5F*s);
+  } else {
+   const bool losing=game.state()==RunState::Lost&&player.health<=0;
+   for(int i=0;i<Game::livesPerLevel;++i) {
+    const ImVec2 c((56+i*34)*s,ly);
+    const bool alive=i<game.lives(),justLost=losing&&i==game.lives();
+    if(alive)live(c);
+    else head(c,justLost?withAlpha(danger,.5F+.5F*std::sin(player.deathTime*14)):withAlpha(ice,.25F),justLost);
+   }
+  }
+ }
  if(hudRevision_!=game.revision()){hudRevision_=game.revision();hudCoreCount_=game.collectedCount();coreCollectedAt_=-10;}
  if(game.collectedCount()>hudCoreCount_)coreCollectedAt_=t;
  hudCoreCount_=game.collectedCount();
@@ -117,8 +142,8 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
   d->AddPolyline(infinity,64,clockColour,ImDrawFlags_Closed,7*s);
  }
  const auto key=[](KeyAction a){return KeyBindings::keyName(keyBindings()[a]);};
- // Helios Yard is a full-edition mission: no words in play (messages, prompts, key hints); a door
- // glyph keeps the exit marked. The two Lite yards keep their teaching text.
+ // The showcase and Helios use symbols instead of teaching text, interaction prompts or key
+ // hints (the text paths remain for the code-built fallback yard).
  const bool words=!game.wordless();
  if(game.state()==RunState::Playing&&words) {
   if(game.messageTime()>0)label(40,130,28,main,game.message());
@@ -130,8 +155,7 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
   // The exit: a door glyph that always marks the gate, pinned to the screen edge (with a
   // chevron pointing on) while the gate is off screen. Amber while sealed, mint once open.
   const auto at=renderer.projectToEdge(game.gatePosition()+glm::vec3(0,3.4F,0),size.x,size.y,54*s,190*s);
-  const auto map = game.level()==Game::heliosLevel
-      ? drawHeliosMinimap(*d,game,size,s) : MinimapCircle{};
+  const auto map = drawYardMinimap(*d,game,size,s);
   // The minimap has its own exit direction cue when this glyph would cover it.
   if(!map.overlaps({at.x,at.y},44*s)) {
    const bool open=game.gateUnlocked();const ImU32 c=open?mint:amber;
@@ -160,11 +184,37 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  }
  const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Sprint)+" SPRINT   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE   F1 GRAPHICS";
  if(words)centered(height-28,20,secondary,controls);
- if(game.state()!=RunState::Playing) {
+ if(game.respawning()||game.outOfLives()) {
+  // Reboot (full edition): a banner and a progress bar after the fall, then a fade to black for
+  // the beam-in. With no lives left the banner turns red and the level restarts (main.cpp).
+  const float since=player.deathTime,shown=std::clamp((since-.6F)/.4F,0.F,1.F);
+  const float by=height*.30F;
+  const bool out=game.outOfLives();
+  if(words) {
+   char reboot[96];
+   if(out) std::snprintf(reboot,sizeof(reboot),"ALL LIVES LOST  //  RESTARTING");
+   else if(game.livesLimited()) std::snprintf(reboot,sizeof(reboot),"REBOOTING  //  %d %s LEFT",game.lives(),game.lives()==1?"LIFE":"LIVES");
+   else std::snprintf(reboot,sizeof(reboot),"REBOOTING");
+   centered(by,40,withAlpha(out?danger:glowCyan,shown),reboot);
+  }
+  if(!out) {
+   const float progress=std::clamp(since/Game::respawnDelay,0.F,1.F),barX=size.x*.5F-210*s;
+   for(int i=0;i<24;++i) {
+    const bool done=float(i)/24.F<progress;const ImU32 c=withAlpha(done?glowCyan:IM_COL32(112,162,192,255),(done?.9F:.3F)*shown);
+    cell(barX+float(i)*17.5F*s,(by+64)*s,12*s,6*s,c);
+   }
+  }
+  const float black=std::clamp((since-(Game::respawnDelay-.5F))/.45F,0.F,1.F);
+  if(black>0)ImGui::GetForegroundDrawList()->AddRectFilled({0,0},size,withAlpha(IM_COL32(2,7,14,255),black));
+ } else if(game.state()!=RunState::Playing) {
   centered(height*.4F,52,game.state()==RunState::Won?mint:danger,game.state()==RunState::Won?"LEVEL COMPLETE":game.timedOut()?"TIME UP":"ROBOT DISABLED");
   centered(height*.4F+78,32,main,clock);
-  centered(height*.4F+140,28,main,key(KeyAction::Restart)+(game.state()==RunState::Won?" RESTART   /   ENTER NEXT LEVEL":" RESTART"));
-  if(game.state()==RunState::Won&&ImGui::IsKeyPressed(ImGuiKey_Enter,false))levelRequest_=(game.level()+1)%Game::levelCount;
+  // After the last level the only way on is back to the main menu (Enter); R does nothing there.
+  const bool won=game.state()==RunState::Won,final=won&&game.level()==Game::levelCount-1;
+  centered(height*.4F+140,28,main,final?std::string("ENTER  MAIN MENU"):key(KeyAction::Restart)+(won?" RESTART   /   ENTER NEXT LEVEL":" RESTART"));
+  if(won&&(ImGui::IsKeyPressed(ImGuiKey_Enter,false)||ImGui::IsKeyPressed(ImGuiKey_KeypadEnter,false))) {
+   if(final) menuRequest_=true; else levelRequest_=(game.level()+1)%Game::levelCount;
+  }
  }
  return false;
 }

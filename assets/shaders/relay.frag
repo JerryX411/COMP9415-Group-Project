@@ -8,13 +8,23 @@ uniform sampler2DArray uAlbedo, uNormal;
 uniform bool uNormalMapping, uNormalCompare;
 uniform float uNormalStrength, uSplitX;
 uniform vec3 uEye, uFogColour;
-uniform float uFogDensity;
+uniform float uFogDensity, uTime;
 // Map-edge cutaway: room floor bounds (min x, min z, max x, max z). When the camera is beyond
 // a boundary, that side's outer wall and its fixtures are not drawn, so they never hide the
 // courier (who never comes within 0.3 of a wall). The floor stays.
 uniform bool uCutaway;
 uniform vec4 uRoom;
 out vec4 fragColour;
+float hash1(float n) { float h = sin(n * 12.9898) * 43758.5453; return h - floor(h); }
+// Same flicker as relay::crimsonFlicker (RelayGame.h): about .75 most of the time.
+float crimsonFlicker(float time, float seed) {
+  float step=floor(time*14.0), slow=floor(time*3.0);
+  float jitter=hash1(step*1.7+seed*9.1), dip=hash1(slow*3.3+seed*5.7);
+  float k=.68+.14*jitter;
+  if(dip>.82&&jitter>.35) k=.12+.1*jitter;
+  else if(jitter>.93) k=1.0;
+  return k;
+}
 void main() {
   if(uCutaway&&vPosition.y>1.001) {
     const float edge=.06;
@@ -34,6 +44,23 @@ void main() {
     vec3 glow=vColour*(vMaterial.y-1.0);
     if(vMaterial.z>0.0) glow=glow*mix(1.0,.5+.45*max(dot(n,light),0.0)+.2*n.y,vMaterial.z);
     fragColour=vec4(mix(glow,uFogColour,fog*.6),vAlpha*soft);
+    return;
+  }
+  // Void floor (surface 9): the full edition's crimson tiles. A near-black red bed of cells, each
+  // flickering dark red like a failing light on its own beat (a stepped jitter, brief dips toward
+  // dark, the odd bright pop), shared with a slower glow over 6 x 6 blocks and a soft wave.
+  if(vSurface>8.5) {
+    vec2 cell=floor(vPosition.xz+.0001), f=fract(vPosition.xz);
+    float seed=cell.x*7.0+cell.y*13.0;
+    vec2 block=floor(vPosition.xz/6.0);
+    float k=.6*crimsonFlicker(uTime,seed)+.4*crimsonFlicker(uTime,block.x*3.1+block.y*5.3);
+    float wave=.5+.5*sin(uTime*2.6-(cell.x+cell.y)*.7);
+    float edge=min(min(f.x,1.0-f.x),min(f.y,1.0-f.y));
+    vec3 crimson=vec3(.62,.03,.08);
+    vec3 lit=crimson*(.22+.32*k+.08*wave)*(.25+.9*(.08+.38*k+.05*wave));
+    vec3 bed=vec3(.11,.01,.02)*.7;
+    vec3 colour=mix(bed,lit,smoothstep(.035,.06,edge));
+    fragColour=vec4(mix(colour,uFogColour,fog*.7),vAlpha);
     return;
   }
   // Derive the UV basis from world-space derivatives. This retains UV handedness

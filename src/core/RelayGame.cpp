@@ -120,15 +120,38 @@ bool Game::blockedPlayer(glm::vec3 feet,int ignoreMover) const {
   for(const auto& part:fixtures()) if(cylinderIntersectsBox(feet,playerRadius,height,part)) return true;
   return false;
 }
+// Plates beat every 6 s: 3 s safe, a 1 s warning, 2 s of shock. A random plate (Helios's big shock
+// floor) has its own offset, and in every 6 s slot its warning starts at a random moment between
+// 0.5 and 2.5 s. The warning always comes first, and at least 1 s of safe floor separates two
+// shocks. The schedule is a hash of the slot and the plate, so it is the same on every replay.
+namespace {
+float randomTrapStart(float slot, std::size_t index) {
+  const float h = std::sin(slot * 12.9898F + float(index) * 78.233F + 4.1F) * 43758.5453F;
+  return .5F + 2.F * (h - std::floor(h));
+}
+}
 TrapPhase Game::trapPhase(std::size_t i) const {
   const auto& t = traps_.at(i);
   if (t.disabledFor > 0) return TrapPhase::Disabled;
+  if (t.random) {
+    const float time = elapsed_ + t.cycleOffset, slot = std::floor(time / 6.F), in = time - slot * 6.F;
+    const float start = randomTrapStart(slot, i);
+    return in < start || in >= start + 3 ? TrapPhase::Safe : in < start + 1 ? TrapPhase::Warning : TrapPhase::Active;
+  }
   const float phase = std::fmod(elapsed_ + t.cycleOffset, 6.0F);
   return phase < 3 ? TrapPhase::Safe : phase < 4 ? TrapPhase::Warning : TrapPhase::Active;
 }
 float Game::trapPhaseRemaining(std::size_t i) const {
   const auto& t = traps_.at(i);
   if (t.disabledFor > 0) return t.disabledFor;
+  if (t.random) {
+    const float time = elapsed_ + t.cycleOffset, slot = std::floor(time / 6.F), in = time - slot * 6.F;
+    const float start = randomTrapStart(slot, i);
+    if (in < start) return start - in;
+    if (in < start + 1) return start + 1 - in;
+    if (in < start + 3) return start + 3 - in;
+    return 6.F - in + randomTrapStart(slot + 1, i);
+  }
   const float phase = std::fmod(elapsed_ + t.cycleOffset, 6.0F);
   return (phase < 3 ? 3.0F : phase < 4 ? 4.0F : 6.0F) - phase;
 }
@@ -198,14 +221,17 @@ void Game::reset(int level) {
  elapsed_=0; timeLimit_=challengeTimeLimit; gateOpen_=0; crouchToggle_=false; hitStop_=0;
  player_=Player{}; spawn_={8,1,25}; gate_={32,1,7}; player_.position=spawn_; player_.motion.spawnAge=10; footStep_=0;
  doors_.clear(); plates_.clear(); portals_.clear(); portalWait_=0; portalHold_=-1; teleports_=0;
- if(level_==heliosLevel) {
+ falls_=0; checkpoints_.clear(); respawn_=spawn_; lives_=livesPerLevel; respawnPending_=false;
+ if(level_==0||level_==heliosLevel||level_==runLevel) {
   LevelData data; std::string error; bool loaded=false;
-  try { loaded=LevelData::load(craft::core::assetPath("levels/helios_yard.txt"),data,&error); }
+  const char* map=level_==0?"levels/tutorial_showcase.txt":level_==heliosLevel?"levels/helios_yard.txt":"levels/corona_run.txt";
+  try { loaded=LevelData::load(craft::core::assetPath(map),data,&error); }
   catch(const std::exception& e) { error=e.what(); }
   if(loaded) { applyLevel(data); return; }
-  std::cerr<<"Helios Yard could not be loaded ("<<error<<"); using the tutorial yard."<<std::endl;
+  std::cerr<<"Level could not be loaded ("<<error<<"); using the fallback yard."<<std::endl;
   level_=0;
  }
+ // Fallback only (a missing map file): the original small tutorial yard, built in code.
  remaining_=level_==0?0:timeLimit_;
  room_={{4,1,4},{36,4,36}}; wallHeight_=3;
  cores_.clear(); interactionIndex_=-1; interactionCommitted_=false;
@@ -215,52 +241,50 @@ void Game::reset(int level) {
  world_.fill(12,1,22,15,2,26,2);
  world_.fill(19,2,20,23,4,27,2);
  world_.fill(19,1,19,23,4,20,2); world_.fill(19,1,27,23,4,28,2);
- if(level_==0) {
-  world_.fill(5,1,24,6,3,27,0);
-  traps_.push_back({{{12,1,12},{17,1.7F,15}},0,0});
-  switches_.push_back({{10,1,16},0,0});
-  movers_.push_back({{25,1.75F,10},{25,1.75F,24},{25,1.75F,10},{.65F,.75F,.65F},6,0});
- } else {
-  traps_.push_back({{{8,1,9},{13,1.7F,12}},1,0});
-  traps_.push_back({{{25,1,26},{29,1.7F,29}},3,0});
-  switches_.push_back({{7,1,14},0,0}); switches_.push_back({{30,1,30},1,0});
-  movers_.push_back({{14,1.75F,16},{29,1.75F,16},{14,1.75F,16},{.65F,.75F,.65F},7,0});
-  world_.fill(28,1,8,31,2,11,2);
- }
+ world_.fill(5,1,24,6,3,27,0);
+ traps_.push_back({{{12,1,12},{17,1.7F,15}},0,0});
+ switches_.push_back({{10,1,16},0,0});
+ movers_.push_back({{25,1.75F,10},{25,1.75F,24},{25,1.75F,10},{.65F,.75F,.65F},6,0});
  cores_={{{9,1.8F,22},false},{{16.5F,1.8F,23},false},{{28,1.8F,13},false}};
- if(level_==1) cores_={{{8,1.8F,22},false},{{24.5F,1.8F,23},false},{{29,2.8F,9},false}};
- jumpPads_={JumpPad{level_==0?glm::vec3(10,1,19):glm::vec3(26,1,12)}};
+ jumpPads_={JumpPad{glm::vec3(10,1,19)}};
  message_="Collect 3 cores. Cyan arrow pads launch you higher."; messageTime_=5;
 }
 void Game::applyLevel(const LevelData& d) {
- // The full edition's level loader, limited to the pieces Helios Yard uses: voxels and floor
+ // Shared authored-map loader for the tutorial showcase and Helios Yard: voxels and floor
  // paint, cores, floor traps (and their relays), moving blocks, blast doors with their plates
  // (on any floor), the jump pad and the portal pair.
  room_={{float(d.minX),1,float(d.minZ)},{float(d.maxX),4,float(d.maxZ)}};
  wallHeight_=std::clamp(d.wall,LevelData::minHeight,LevelData::maxHeight);
  timeLimit_=std::max(1.F,d.time); remaining_=timedLevel()?timeLimit_:0; elapsed_=0;
- spawn_={d.spawn.x,1,d.spawn.y}; gate_={d.gate.x,1,d.gate.y};
- player_=Player{}; player_.position=spawn_; player_.yaw=d.spawnYaw; player_.motion.spawnAge=10; footStep_=0;
+ gate_={d.gate.x,1,d.gate.y};
  world_.clear(); buildShell();
  for(int y=1;y<=d.height;++y) for(int z=d.minZ;z<d.maxZ;++z) for(int x=d.minX;x<d.maxX;++x)
   if(const auto m=d.cell(x,y,z)) world_.set(x,y,z,m);
  for(int z=d.minZ;z<d.maxZ;++z) for(int x=d.minX;x<d.maxX;++x)
   if(const auto m=d.floorPaint(x,z)) world_.set(x,0,z,m);
+ // The spawn stands on whatever is built there (the parkour run starts on a raised platform).
+ spawn_={d.spawn.x,surfaceAt(d.spawn.x,d.spawn.y),d.spawn.y}; respawn_=spawn_;
+ player_=Player{}; player_.position=spawn_; player_.yaw=d.spawnYaw; player_.motion.spawnAge=10; footStep_=0;
  cores_.clear(); traps_.clear(); switches_.clear(); movers_.clear(); jumpPads_.clear();
  doors_.clear(); plates_.clear(); portals_.clear(); particles_.fill(Particle{});
  interactionIndex_=-1; interactionCommitted_=false; portalWait_=0; portalHold_=-1; teleports_=0;
  // Cores, the jump pad and portal ends stand on top of whatever is built at their spot.
  for(const auto& c:d.cores) cores_.push_back({{c.x,surfaceAt(c.x,c.y)+.8F,c.y},false});
- for(const auto& t:d.traps) traps_.push_back({{{std::min(t.min.x,t.max.x),1.F,std::min(t.min.y,t.max.y)},{std::max(t.min.x,t.max.x),1.1075F,std::max(t.min.y,t.max.y)}},t.offset,0.F});
+ for(const auto& t:d.traps) { const float y=float(t.level); traps_.push_back({{{std::min(t.min.x,t.max.x),y,std::min(t.min.y,t.max.y)},{std::max(t.min.x,t.max.x),y+.1075F,std::max(t.min.y,t.max.y)}},t.offset,0.F});
+  // A random plate also gets its own offset (0..6 s from its index), so neighbours fall out of step.
+  if(t.random) { auto& f=traps_.back(); f.random=true; const float h=std::sin(float(traps_.size())*91.7F+.3F)*43758.5453F; f.cycleOffset+=6.F*(h-std::floor(h)); } }
  for(const auto& s:d.switches) switches_.push_back({{s.at.x,1.F,s.at.y},s.trap,0.F});
  for(const auto& m:d.movers) {
-  MovingHazard h{{m.a.x,1.55F,m.a.y},{m.b.x,1.55F,m.b.y},{},{.65F,.55F,.65F},m.period,m.offset};
+  const float y=float(m.level)+.55F;
+  MovingHazard h{{m.a.x,y,m.a.y},{m.b.x,y,m.b.y},{},{.65F,.55F,.65F},m.period,m.offset};
   h.position=glm::mix(h.start,h.end,(1-std::cos(h.offset*2*pi/h.period))*.5F);
   movers_.push_back(h);
  }
  // Doors and plates stand on their level (1: the ground; higher: an upper floor).
  for(const auto& o:d.doors) doors_.push_back({{o.at.x,float(o.level)+1,o.at.y},o.alongZ?glm::vec3(.25F,1,o.halfWidth):glm::vec3(o.halfWidth,1,.25F),o.alongZ});
  for(const auto& p:d.plates) plates_.push_back({{p.at.x,float(p.level),p.at.y},p.door});
+ checkpoints_.clear(); falls_=0; lives_=livesPerLevel; respawnPending_=false;
+ for(const auto& c:d.checkpoints) checkpoints_.push_back({{c.at.x,surfaceAt(c.at.x,c.at.y),c.at.y},{c.respawn.x,surfaceAt(c.respawn.x,c.respawn.y),c.respawn.y},false,10});
  for(const auto& p:d.jumpPads) jumpPads_.push_back(JumpPad{{p.x,surfaceAt(p.x,p.y),p.y}});
  for(const auto& p:d.portals) portals_.push_back({{p.from.x,surfaceAt(p.from.x,p.from.y),p.from.y},{p.to.x,surfaceAt(p.to.x,p.to.y),p.to.y}});
  message_.clear(); messageTime_=0;
@@ -285,7 +309,7 @@ const std::vector<Bounds>& Game::fixtures() const {
  fixtures_.push_back({g+glm::vec3(-2,2.8F,-.3F),g+glm::vec3(2,3.2F,.3F)});
  return fixtures_;
 }
-const char* Game::nameOf(int level) { return level==0?"TUTORIAL YARD":level==1?"OBSTACLE YARD":"HELIOS YARD"; }
+const char* Game::nameOf(int level) { return level==0?"TUTORIAL YARD":level==heliosLevel?"HELIOS YARD":"CORONA RUN"; }
 bool Game::gateUnlocked() const { return !cores_.empty() && collectedCount()==int(cores_.size()); }
 int Game::collectedCount() const { return int(std::count_if(cores_.begin(),cores_.end(),[](const Core& c){return c.collected;})); }
 int Game::liveParticleCount() const { return int(std::count_if(particles_.begin(),particles_.end(),[](const Particle& p){return p.remaining>0;})); }
@@ -301,6 +325,7 @@ int Game::nearestCore() const {
  return result;
 }
 const char* Game::tutorialHint() const {
+ if(wordless())return "";
  if(gateUnlocked())return "Exit ready: walk through the green door at the far right.";
  if(collectedCount()==0)return "1. Move to the blue core near the start. Press your interact key.";
  if(collectedCount()==1)return "2. Jump over the low block; crouch to pass under the tunnel.";
@@ -369,6 +394,52 @@ void Game::updateDoors(float dt) {
   door.open=std::clamp(door.open+(door.hold>0?2.6F:-2.2F)*dt,0.F,1.F);
  }
 }
+void Game::updateCheckpoints(float dt) {
+ for(auto& c:checkpoints_) {
+  c.activeAge=std::min(10.F,c.activeAge+dt);
+  // Saved on reaching the beacon or the floor it guards (the corner it stands at).
+  const glm::vec3 d=player_.position-c.position,r=player_.position-c.respawn;
+  const bool near=(glm::length(glm::vec2(d.x,d.z))<1.6F&&std::abs(d.y)<1.2F)||(glm::length(glm::vec2(r.x,r.z))<2.F&&std::abs(r.y)<1.2F);
+  if(!c.active&&near) {
+   for(auto& other:checkpoints_) other.active=false;
+   c.active=true; c.activeAge=0; respawn_=c.respawn;
+   emitBurst(c.position+glm::vec3(0,1.1F,0),{.35F,1,.85F},12);
+   message_="Checkpoint saved."; messageTime_=2;
+  }
+ }
+ // Landing on the void floor (the abyss under the run) is a fall.
+ if(player_.grounded&&player_.position.y<1.2F&&world_.cell(int(std::floor(player_.position.x)),0,int(std::floor(player_.position.z)))==LevelData::Void) fallBack();
+}
+void Game::fallBack() {
+ ++falls_;
+ --player_.health; player_.hurtCooldown=1; player_.motion.hitAge=0; player_.hitBlend=.85F;
+ if(player_.health<=0) { beginDeath(); return; }
+ player_.position=respawn_; player_.velocity=glm::vec3(0); player_.locomotion={0,0}; player_.knockback={0,0};
+ player_.grounded=true; player_.jumpActive=false; player_.coyoteTime=player_.jumpBuffer=0; player_.motion.spawnAge=0;
+ emitBurst(respawn_+glm::vec3(0,.6F,0),{.5F,.95F,1},14);
+ message_="Fell. Back to the last checkpoint."; messageTime_=2;
+ ++revision_;  // Snaps the follow camera to the checkpoint.
+}
+void Game::beginDeath() {
+ if(state_==RunState::Lost) return;
+ state_=RunState::Lost; player_.deathTime=.01F; player_.locomotion={0,0}; player_.sprinting=false;
+ player_.interaction=Interaction::None; player_.interactionTime=0;
+ if(livesLimited()) lives_=std::max(0,lives_-1);
+ respawnPending_=!livesLimited()||lives_>0;
+ message_=respawnPending_?"Robot disabled. Rebooting.":"All lives lost. Restarting the level."; messageTime_=3;
+}
+void Game::reboot() {
+ // Beam back in at the saved spot with full armour and a second of grace (shown as a blink).
+ const float yaw=player_.yaw;
+ player_=Player{}; player_.position=respawn_; player_.yaw=yaw; player_.grounded=true;
+ player_.motion.spawnAge=0; player_.hurtCooldown=1;
+ crouchToggle_=false; interactionIndex_=-1; interactionCommitted_=false;
+ state_=RunState::Playing; respawnPending_=false;
+ emitBurst(respawn_+glm::vec3(0,.6F,0),{.4F,1,.9F},16);
+ message_=livesLimited()?std::string("Rebooted. ")+std::to_string(lives_)+(lives_==1?" life left.":" lives left."):"Rebooted.";
+ messageTime_=3;
+ ++revision_;  // Snaps the follow camera to the respawn point.
+}
 void Game::emitBurst(glm::vec3 at,glm::vec3 colour,int count) {
  int emitted=0;
  for(auto& p:particles_) {
@@ -409,7 +480,7 @@ void Game::applyDamage(glm::vec3 source,int,bool,DamageKind) {
  player_.motion.hitForward=-direction.x*std::sin(player_.yaw)-direction.y*std::cos(player_.yaw);
  message_="Impact! Avoid the shock floor and moving blocks."; messageTime_=2;
  player_.interaction=Interaction::None; player_.interactionTime=0;
- if(player_.health<=0) { state_=RunState::Lost; player_.deathTime=.01F; player_.locomotion={0,0}; message_="Robot disabled. Press R to restart."; }
+ if(player_.health<=0) beginDeath();
 }
 void Game::emitImpact(glm::vec3 direction) {
  int emitted=0;
@@ -515,9 +586,12 @@ void Game::update(float seconds,const Input& input) {
 void Game::step(float dt,const Input& input) {
  updateParticles(dt);
  if(state_!=RunState::Playing) {
-  // Presentation settles after the result while the run clock stays frozen.
+  // Presentation settles after the result while the run clock stays frozen. A destroyed robot
+  // topples, and reboots after respawnDelay while it still has lives.
   player_.hitStun=std::max(0.F,player_.hitStun-dt);
+  if(player_.health<=0) player_.deathTime+=dt;
   updateAnimation(dt,player_.position,0);
+  if(respawnPending_&&player_.deathTime>=respawnDelay) reboot();
   return;
  }
  if(timedLevel()) {
@@ -589,7 +663,7 @@ void Game::step(float dt,const Input& input) {
   else {liftTick_+=dt;while(liftTick_>=.04F){liftTick_-=.04F;emitLiftParticles(player_.position,true);}}
  }
  for(std::size_t i=0;i<traps_.size();++i) if(trapPhase(i)==TrapPhase::Active&&traps_[i].touchesFeet(player_.position,footRadius)) applyDamage((traps_[i].area.min+traps_[i].area.max)*.5F,int(i),true,DamageKind::Electric);
- updateDoors(dt); updatePortals(dt);
+ updateDoors(dt); updatePortals(dt); updateCheckpoints(dt);
  if(player_.position.y<-5) { state_=RunState::Lost; player_.health=0; }
  if(state_==RunState::Playing&&gateUnlocked()&&gateOpen_>.98F&&std::abs(player_.position.x-gatePosition().x)<1.1F&&player_.position.z<gatePosition().z-.35F&&player_.position.z>gatePosition().z-1.8F&&player_.position.y<1.5F) {
   state_=RunState::Won;player_.velocity={0,0,0};player_.locomotion={0,0};player_.moveBlend=0;player_.interaction=Interaction::None;
@@ -608,7 +682,8 @@ void Game::updateAnimation(float dt,glm::vec3 previous,float turn) {
  player_.hitBlend=blend(player_.hitBlend,player_.motion.hitAge<.08F?1.F:0.F,12);
  player_.idlePhase+=dt;
  auto& a=player_.motion;
- for(float* age:{&a.startAge,&a.stopAge,&a.pivotAge,&a.launchAge,&a.landAge,&a.stepAge,&a.hitAge}) *age=std::min(10.F,*age+dt);
+ // spawnAge and teleportAge drive the beam-in pop after a respawn; they must keep counting.
+ for(float* age:{&a.startAge,&a.stopAge,&a.pivotAge,&a.launchAge,&a.landAge,&a.stepAge,&a.hitAge,&a.spawnAge,&a.teleportAge}) *age=std::min(10.F,*age+dt);
  a.verticalVelocity=blend(a.verticalVelocity,player_.velocity.y,18);
  motionSpring(a.lean,a.leanVelocity,-.13F*player_.moveBlend,20,.65F,dt);
  motionSpring(a.lookYaw,a.lookVelocity,std::clamp(turn*.45F,-.6F,.6F),26,.85F,dt);

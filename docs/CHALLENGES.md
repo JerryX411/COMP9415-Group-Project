@@ -60,4 +60,6 @@ These retained measurements precede the five-material update and must be rerun f
 | Tutorial | 0.367551 | 0.180600 | 68001 / 55037 | 8 / 8 |
 | Obstacle | 0.363275 | 0.189072 | 69437 / 56389 | 8 / 8 |
 
+The Obstacle Yard row is a historical measurement: that level was removed on 2026-11-09, and `--benchmark --level 1` now measures Helios Yard.
+
 The first baseline trial is slower than later ones: retain all raw values rather than selecting the fastest. These figures describe this frozen scene on this machine, not a general FPS promise. The captured baseline/optimised images are not bit-identical: mean absolute per-channel differences are below 0.009 on a 0..255 scale. Inspect the captures alongside timing results; do not claim exact pixel equivalence. Normal strength zero versus OFF was separately verified pixel-identical. Full-resolution captures and verification.json are in the local Challenge-Checks-20261108 output folder.

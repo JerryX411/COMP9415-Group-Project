@@ -180,12 +180,13 @@ void Renderer::rebuildTerrain(const Game& game, bool optimised, bool whitebox) {
     // painted on the floor. The fraction of the surface index is a faint self-glow, so guide trim
     // and beacons still read in shadow.
     float surface=y==0?2.F:y==1?4.F:1.F,glow=0;
-    const bool special=material>=4&&material<=8;
+    const bool special=material>=4&&material<=9;
     if(material==4){colour={.90F,.70F,.46F};surface=5;glow=.12F;}       // soft amber guide trim
     if(material==5){colour={.34F,.84F,.98F};surface=5;glow=.45F;}       // cyan beacon
     if(material==6){colour={.46F,.58F,.60F};surface=5;glow=.04F;}       // faint shortcut mark
     if(material==7){colour={.88F,.77F,.60F};surface=1;}                  // sandstone
     if(material==8){colour={.42F,.47F,.54F};surface=3;}                  // slate
+    if(material==9){colour={1,1,1};surface=9;glow=0;}                   // void floor: crimson cells (relay.frag)
     for(auto n: directions) {
       const bool exposed = world.cell(x+n.x,y+n.y,z+n.z)==0;
       if(exposed) ++stats_.visibleFaces;
@@ -306,7 +307,7 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);
   shader_.setInt("uNormalCompare",options.normalCompare?1:0);
   shader_.setFloat("uNormalStrength",options.normalStrength);shader_.setFloat("uSplitX",float(width)*.5F);
-  shader_.setVec3("uFogColour",fog); shader_.setFloat("uFogDensity",fogDensity);
+  shader_.setVec3("uFogColour",fog); shader_.setFloat("uFogDensity",fogDensity); shader_.setFloat("uTime",menuTime_);
   // The camera may pass the map edge (see FollowCamera): cut away the boundary wall it is behind.
   const bool cutaway=!options.gallery&&!options.menu&&sceneGame_;
   shader_.setInt("uCutaway",cutaway?1:0);

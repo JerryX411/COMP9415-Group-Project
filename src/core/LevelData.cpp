@@ -137,10 +137,10 @@ bool LevelData::save(const std::filesystem::path& path, std::string* error) cons
     }
   }
   for (const auto& c : cores) out << "core " << c.x << ' ' << c.y << '\n';
-  for (const auto& t : traps) out << "trap " << t.min.x << ' ' << t.min.y << ' ' << t.max.x << ' ' << t.max.y << ' ' << t.offset << '\n';
+  for (const auto& t : traps) { out << "trap " << t.min.x << ' ' << t.min.y << ' ' << t.max.x << ' ' << t.max.y << ' ' << t.offset; if (t.level != 1 || t.random) out << ' ' << t.level; if (t.random) out << " random"; out << '\n'; }
   for (const auto& s : switches) out << "switch " << s.at.x << ' ' << s.at.y << ' ' << s.trap << '\n';
   for (const auto& c : checkpoints) out << "checkpoint " << c.at.x << ' ' << c.at.y << ' ' << c.respawn.x << ' ' << c.respawn.y << '\n';
-  for (const auto& m : movers) out << "mover " << m.a.x << ' ' << m.a.y << ' ' << m.b.x << ' ' << m.b.y << ' ' << m.period << ' ' << m.offset << '\n';
+  for (const auto& m : movers) { out << "mover " << m.a.x << ' ' << m.a.y << ' ' << m.b.x << ' ' << m.b.y << ' ' << m.period << ' ' << m.offset; if (m.level != 1) out << ' ' << m.level; out << '\n'; }
   // Doors and plates write their level only above the ground, so older files stay unchanged.
   for (const auto& d : doors) {
     out << "door " << d.at.x << ' ' << d.at.y << ' ' << d.halfWidth << ' ' << (d.alongZ ? 'z' : 'x');
@@ -207,10 +207,10 @@ bool LevelData::load(const std::filesystem::path& path, LevelData& result, std::
       if (layer > d.height) d.setHeight(layer);  // A file without a height line grows to fit.
       row = 0;
     } else if (key == "core") { glm::vec2 c; if (!(s >> c.x >> c.y)) return bad(); d.cores.push_back(c); }
-    else if (key == "trap") { Trap t; if (!(s >> t.min.x >> t.min.y >> t.max.x >> t.max.y)) return bad(); s >> t.offset; d.traps.push_back(t); }
+    else if (key == "trap") { Trap t; int level = 1; std::string word; if (!(s >> t.min.x >> t.min.y >> t.max.x >> t.max.y)) return bad(); if (s >> t.offset && s >> level) { t.level = std::clamp(level, 1, maxHeight); if (s >> word && word == "random") t.random = true; } d.traps.push_back(t); }
     else if (key == "switch") { Switch w; if (!(s >> w.at.x >> w.at.y >> w.trap)) return bad(); d.switches.push_back(w); }
     else if (key == "checkpoint") { Checkpoint c; if (!(s >> c.at.x >> c.at.y >> c.respawn.x >> c.respawn.y)) return bad(); d.checkpoints.push_back(c); }
-    else if (key == "mover") { Mover m; if (!(s >> m.a.x >> m.a.y >> m.b.x >> m.b.y >> m.period)) return bad(); s >> m.offset; m.period = std::max(.5F, m.period); d.movers.push_back(m); }
+    else if (key == "mover") { Mover m; int level = 1; if (!(s >> m.a.x >> m.a.y >> m.b.x >> m.b.y >> m.period)) return bad(); if (s >> m.offset && s >> level) m.level = std::clamp(level, 1, maxHeight); m.period = std::max(.5F, m.period); d.movers.push_back(m); }
     else if (key == "door") {
       Door o; char axis = 'x'; int level = 1;
       if (!(s >> o.at.x >> o.at.y >> o.halfWidth)) return bad();

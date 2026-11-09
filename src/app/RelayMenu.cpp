@@ -45,28 +45,36 @@ void drawLevelTransition(float black,float card,const char* kicker,const char* n
  d->AddLine({size.x*.5F-half,y+96*s},{size.x*.5F+half,y+96*s},withAlpha(accent,card),2*s);
 }
 MenuAction drawMenu(MenuMode mode,int& level,float,bool){
+ // Title: the name over five centred rows (Tutorial, Level 1, Level 2, Settings, Quit); picking a
+ // level starts it. Pause: a dark veil over the game with four centred rows.
  const bool pause=mode==MenuMode::Pause;auto* d=ImGui::GetBackgroundDrawList();auto size=ImGui::GetIO().DisplaySize;float s=scale();
- if(mode!=lastMode){selected=0;lastMode=mode;}navigation(selected,4);
- const float x=size.x*.5F-290*s,top=size.y*.5F-235*s;
- center(d,top,58*s,ink,pause?"Paused":"Core Explorer Lite");
- center(d,top+78*s,26*s,muted,pause?"Game paused":"Collect cores and reach the exit");
- const char* levelNames[]{"Tutorial Yard","Obstacle Yard","Helios Yard"};
- const std::string levelLabel=std::string("Level: ")+levelNames[std::clamp(level,0,2)]+"   < >";
- const char* labels[]{pause?"Resume":"Start game",pause?"Restart":levelLabel.c_str(),"Settings",pause?"Main menu":"Quit"};
+ const int count=pause?4:5;
+ if(mode!=lastMode){selected=pause?0:std::clamp(level,0,2);lastMode=mode;}navigation(selected,count);
+ const float top=size.y*.5F-(pause?235.F:250.F)*s;
+ if(pause) d->AddRectFilled({0,0},size,IM_COL32(2,6,12,175));
+ center(d,top+20*s,58*s,ink,pause?"Paused":"Core Explorer Lite");
+ const char* titleLabels[]{"Tutorial","Level 1","Level 2","Settings","Quit"};
+ const char* pauseLabels[]{"Resume","Restart","Settings","Main menu"};
+ const char* const* labels=pause?pauseLabels:titleLabels;
  int activated=-1;auto mouse=ImGui::GetIO().MousePos;bool moved=std::abs(mouse.x-lastMouse.x)+std::abs(mouse.y-lastMouse.y)>.5F;lastMouse=mouse;
- for(int i=0;i<4;++i){ImVec2 a{x,top+(120+i*65)*s},b{x+580*s,a.y+54*s};
+ auto* font=face?face:ImGui::GetFont();
+ for(int i=0;i<count;++i){
+  const float w=font->CalcTextSizeA(32*s,1e6F,0,labels[i]).x;
+  const ImVec2 a{size.x*.5F-w*.5F-20*s,top+(115+i*65)*s},b{a.x+w+40*s,a.y+54*s};
   if(moved&&mouse.x>=a.x&&mouse.x<=b.x&&mouse.y>=a.y&&mouse.y<=b.y)selected=i;
   if(button(d,a,b,labels[i],selected==i,s))activated=i;
  }
- if(!pause&&selected==1&&(ImGui::IsKeyPressed(ImGuiKey_LeftArrow)||ImGui::IsKeyPressed(ImGuiKey_A)))level=(level+2)%3;
- if(!pause&&selected==1&&(ImGui::IsKeyPressed(ImGuiKey_RightArrow)||ImGui::IsKeyPressed(ImGuiKey_D)))level=(level+1)%3;
  if(enter())activated=selected;
- center(d,top+425*s,23*s,pause?ink:muted,"W / S or arrows to select   |   Enter to confirm");
- if(activated==0)return pause?MenuAction::Resume:MenuAction::Start;
- if(activated==1){if(pause)return MenuAction::Restart;level=(level+1)%3;}
- if(activated==2){capture=-1;return MenuAction::Settings;}
- if(activated==3)return pause?MenuAction::Title:MenuAction::Quit;
- return MenuAction::None;
+ if(activated<0)return MenuAction::None;
+ if(pause){
+  if(activated==0)return MenuAction::Resume;
+  if(activated==1)return MenuAction::Restart;
+  if(activated==2){capture=-1;return MenuAction::Settings;}
+  return MenuAction::Title;
+ }
+ if(activated<=2){level=activated;return MenuAction::Start;}
+ if(activated==3){capture=-1;return MenuAction::Settings;}
+ return MenuAction::Quit;
 }
 bool drawSettings(KeyBindings& keys,float,int pressedKey,bool escape,bool){
  auto* d=ImGui::GetBackgroundDrawList();auto size=ImGui::GetIO().DisplaySize;float s=scale();
