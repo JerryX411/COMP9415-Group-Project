@@ -48,6 +48,10 @@ Each map has three blue cores. Approach and press the interact key (E by default
 
 ## Member-B integration
 
+The November 9 feature commit `c48d28c41d01b9c92927df4b43d45fbfd9f3b08d` is integrated with its original author preserved. Helios Yard now has a circular minimap below the countdown: it follows the robot, shows the current floor, doors, remaining cores, controls, portals and exit, and includes heading and off-map direction cues. The exit HUD marker avoids covering the minimap. In all levels, the robot faces the mouse-controlled camera heading, including while standing, strafing or backing up. Tunnel camera probes follow the actual movement direction. The added gameplay tests cover idle turning, strafing and reversing.
+
+Only that new feature commit was brought across. The older packaged toolchain, vendor copies, generated build backup and outdated Playable executable on Member-B are excluded; this source checkout keeps its current build setup, procedural sky and transparent menus.
+
 Integrated JerryX411's skybox contribution from Member-B commit db8a1acf1a2562a64f99932586163ae0706976a1 using an author-preserving cherry-pick. Includes cubemap rendering, menu panels, surface detail adjustments and the tutorial passage change. The preceding a08ef51 commit only packages build tools/dependencies and generated output; it is intentionally excluded from the source checkout. The cube-map skybox runtime and assets stay removed; a procedural star sky replaced them (see docs/SKYBOX.md).
 
 ## Lite timer and impact feedback
