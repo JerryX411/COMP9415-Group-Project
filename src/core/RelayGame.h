@@ -34,6 +34,7 @@ class VoxelWorld {
 };
 
 enum class RunState { Playing, Won, Lost };
+enum class CameraMode { Follow, Surrounding };
 enum class TrapPhase { Safe, Warning, Active, Disabled };
 enum class Interaction { None, Core, Switch, Checkpoint, Portal };
 // Moving hazards strike bluntly; live floor plates electrocute.
@@ -48,7 +49,7 @@ struct Input {
   bool crouchPressed = false;  // Toggle crouch on this edge (the C key).
   bool sprintPressed = false;  // Sprint edge: cancels a slide straight into a run.
   bool wallPressed = false;    // Wall action (left mouse button): kick off or shove off a wall.
-  std::optional<float> facingYaw;  // Horizontal view angle in radians, when camera-controlled.
+  std::optional<float> facingYaw;  // Horizontal view angle in radians, applied in Follow mode.
 };
 // Speed-pad states: a walk becomes a fast stride, a sprint becomes a low hover-flight.
 enum class Boost : std::uint8_t { None, Stride, Flight };
@@ -90,6 +91,12 @@ struct Player {
   Interaction interaction = Interaction::None;
   glm::vec3 interactionTarget{};
   CourierMotion motion;
+
+  CameraMode cameraMode() const {
+    constexpr float followSpeed = .1F;
+    return glm::dot(locomotion,locomotion)>followSpeed*followSpeed
+      ? CameraMode::Follow : CameraMode::Surrounding;
+  }
 };
 struct JumpPad { glm::vec3 position{}; float cooldown=0, pulse=0; };
 struct Core { glm::vec3 position{}; bool collected = false; };

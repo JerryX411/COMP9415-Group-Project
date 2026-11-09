@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/Minimap.h"
 #include "app/SceneBenchmark.h"
 #include "graphics/RelayRenderer.h"
 #include "imgui.h"
@@ -22,10 +23,11 @@ class AppUi {
   AppUi& operator=(const AppUi&) = delete;
 
   void beginFrame();
+  void toggleMinimap() { minimapVisible_ = !minimapVisible_; }
   // Returns true when the course-provided benchmark section requests a run.
   [[nodiscard]] bool draw(const BenchmarkSnapshot& benchmark, relay::Game& game,
                           relay::RenderOptions& options, const relay::Renderer& renderer,
-                          bool focused);
+                          float cameraYaw, float dt);
   // Draws the UI, first refreshing the acrylic backdrop (a blurred copy of the scene).
   void render();
   void drawDiagnostics(const relay::Game&,const relay::RenderOptions&,const relay::Renderer&,const relay::FollowCamera&,bool frozen);
@@ -41,6 +43,8 @@ class AppUi {
   [[nodiscard]] bool drawBenchmarkSection(
       const BenchmarkSnapshot& benchmark) const;
   int levelRequest_ = -1;
+  MinimapHeading minimapHeading_;
+  bool minimapVisible_ = true;
   int hudRevision_=-1, hudCoreCount_=0;
   float coreCollectedAt_=-10;
   float prewarmedScale_ = 0;

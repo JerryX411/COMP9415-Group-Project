@@ -12,8 +12,18 @@ struct MinimapCircle {
   bool overlaps(ImVec2 point, float padding) const;
 };
 
-// Read-only HUD for Helios Yard. World +X points right and +Z points down.
-MinimapCircle drawHeliosMinimap(ImDrawList& draw, const relay::Game& game,
-                               ImVec2 display, float scale);
+// Tracks 70% of the view turn and settles to the view heading once it stops.
+class MinimapHeading {
+ public:
+  float update(float cameraYaw, float dt, int sceneRevision);
+
+ private:
+  int revision_ = -1;
+  float yaw_ = 0, previousCameraYaw_ = 0, stillTime_ = 0;
+};
+
+// Read-only map HUD. The displayed view heading points up.
+MinimapCircle drawMinimap(ImDrawList& draw, const relay::Game& game,
+                               ImVec2 display, float scale, float mapYaw);
 
 } // namespace craft::app

@@ -72,21 +72,43 @@ int main(){try{
   g.reset(relay::Game::heliosLevel);
   relay::FollowCamera camera;
   camera.reset(g);
-  camera.orbit(600.F,0);
   relay::Input aim;
-  aim.facingYaw=camera.yaw();
   auto position=g.player().position;
-  advance(g,.1F,aim);
-  check(g.player().yaw==camera.yaw()&&glm::distance(position,g.player().position)<.001F,"Camera turns the idle courier in place");
+  const float idleYaw=g.player().yaw;
+  const auto initialView=camera.movement(0,1);
+  constexpr float quarterOrbit=1.57079633F/.0016F;
+  for(int i=1;i<=4;++i) {
+   camera.orbit(quarterOrbit,0);
+   aim.facingYaw=camera.yaw();
+   advance(g,.1F,aim);
+   camera.update(g,.1F);
+   check(g.player().cameraMode()==relay::CameraMode::Surrounding&&g.player().yaw==idleYaw,
+         "Orbiting an idle courier preserves its heading");
+   if(i==2)check(glm::dot(camera.movement(0,1),initialView)<-.999F,"Camera can orbit to the front");
+  }
+  check(glm::dot(camera.movement(0,1),initialView)>.999F&&glm::distance(position,g.player().position)<.001F,
+        "Camera completes a full orbit around the idle courier");
 
+  camera.orbit(600.F,0);
+  aim.facingYaw=camera.yaw();
   for(const auto keys:{glm::vec2(1,0),glm::vec2(0,-1)}) {
    position=g.player().position;
    aim.movement=camera.movement(keys.x,keys.y);
    advance(g,.3F,aim);
    const auto moved=g.player().position-position;
-   check(glm::dot(glm::vec2(moved.x,moved.z),aim.movement)>.5F&&g.player().yaw==camera.yaw(),
-         "Strafing and backing up preserve the camera heading");
+   check(glm::dot(glm::vec2(moved.x,moved.z),aim.movement)>.5F&&
+         g.player().cameraMode()==relay::CameraMode::Follow&&g.player().yaw==camera.yaw(),
+         "Moving courier follows camera heading while strafing or backing up");
   }
+
+  aim.movement={0,0};
+  advance(g,.4F,aim);
+  const float stoppedYaw=g.player().yaw;
+  camera.orbit(-440.F,0);
+  aim.facingYaw=camera.yaw();
+  advance(g,.1F,aim);
+  check(g.player().cameraMode()==relay::CameraMode::Surrounding&&g.player().yaw==stoppedYaw,
+        "Slowing to a stop returns the camera to surrounding mode");
  }
  g.reset(0); relay::Input jump;jump.jumpPressed=jump.jumpHeld=true;advance(g,.25F,jump);check(g.player().position.y>2,"Jump");advance(g,1);check(g.player().grounded,"Landing");
  g.reset(0);relay::Input crouch;crouch.crouchPressed=true;g.update(.01F,crouch);advance(g,.1F);check(g.player().crouching,"Toggle crouch must persist");

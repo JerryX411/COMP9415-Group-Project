@@ -53,7 +53,8 @@ void AppUi::beginFrame() {
 }
 void AppUi::render() { ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); }
 
-bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions&,const relay::Renderer& renderer,bool) {
+bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions&,const relay::Renderer& renderer,
+                 float cameraYaw,float dt) {
  using namespace relay; using namespace relay::palette;
  auto* d=ImGui::GetBackgroundDrawList(); const auto size=ImGui::GetIO().DisplaySize;
  const float s=std::min(size.x/1440.F,size.y/900.F);
@@ -126,12 +127,15 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
   if(available!=Interaction::None)
    centered(height-155,34,mint,key(KeyAction::Interact)+(available==Interaction::Core?"  COLLECT CORE":available==Interaction::Portal?"  WAKE PORTAL":"  DISABLE TRAP"));
  }
+ MinimapCircle map;
+ if(game.state()==RunState::Playing) {
+  const float mapYaw=minimapHeading_.update(cameraYaw,dt,game.revision());
+  if(minimapVisible_)map=drawMinimap(*d,game,size,s,mapYaw);
+ }
  if(game.state()==RunState::Playing&&!words) {
   // The exit: a door glyph that always marks the gate, pinned to the screen edge (with a
   // chevron pointing on) while the gate is off screen. Amber while sealed, mint once open.
   const auto at=renderer.projectToEdge(game.gatePosition()+glm::vec3(0,3.4F,0),size.x,size.y,54*s,190*s);
-  const auto map = game.level()==Game::heliosLevel
-      ? drawHeliosMinimap(*d,game,size,s) : MinimapCircle{};
   // The minimap has its own exit direction cue when this glyph would cover it.
   if(!map.overlaps({at.x,at.y},44*s)) {
    const bool open=game.gateUnlocked();const ImU32 c=open?mint:amber;
@@ -158,7 +162,8 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
    }
   }
  }
- const std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Sprint)+" SPRINT   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE   F1 GRAPHICS";
+ std::string controls=key(KeyAction::Forward)+key(KeyAction::Left)+key(KeyAction::Back)+key(KeyAction::Right)+" MOVE   "+key(KeyAction::Sprint)+" SPRINT   "+key(KeyAction::Jump)+" JUMP   "+key(KeyAction::Crouch)+" CROUCH   "+key(KeyAction::Interact)+" INTERACT   "+key(KeyAction::Restart)+" RESTART   ESC PAUSE   F1 GRAPHICS";
+ if(game.level()==0&&game.state()==RunState::Playing)controls+="   M to view map";
  if(words)centered(height-28,20,secondary,controls);
  if(game.state()!=RunState::Playing) {
   centered(height*.4F,52,game.state()==RunState::Won?mint:danger,game.state()==RunState::Won?"LEVEL COMPLETE":game.timedOut()?"TIME UP":"ROBOT DISABLED");

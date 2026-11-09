@@ -11,6 +11,8 @@ Current Member-A version: the reduced edition of Core Explorer. The advanced ver
 
 Includes two simple voxel yards plus Helios Yard (see below), robot movement/animation, WASD, Left Shift sprint, mouse camera, Space jump, C toggle crouch, E switch interaction, electric floor plates, moving blocks, armour, restart/pause, and a plain UI over the Member B cubemap sky (see [docs/SKYBOX.md](docs/SKYBOX.md)). E disables the linked floor plate for five seconds. R restarts; Esc pauses. Select LEVEL in the title menu to change maps.
 
+The rotating minimap is visible by default in every yard. Press M to show or hide it for the current session. While moving, the courier faces the mouse camera's heading. When stopped, move the mouse to orbit around the courier.
+
 Removed: arrival cinematic, boost/slide/wall actions, jetpack, checkpoints, advanced pickup effects, training, workshop, advanced particle effects, and the full audio pack. The reduced build is intentionally silent.
 
 Build: `cmake -S . -B build`, then `cmake --build build`. Run `build/CoreExplorerLite.exe` (Windows) or `build/CoreExplorerLite` (Linux). Tests: `ctest --test-dir build --output-on-failure`.

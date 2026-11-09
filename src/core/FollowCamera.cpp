@@ -214,7 +214,7 @@ void FollowCamera::update(const Game& game,float dt) {
   // Swing behind the courier while the shot is still lowering into place (pausing while the
   // player turns the view); once it has settled the mouse turns the view freely.
   // Arriving fast, the swing is paced to finish just before the gap, like the descent.
-  if(need>tunnel_+.01F&&orbitAge_>.15F) {
+  if(player.cameraMode()==CameraMode::Follow&&need>tunnel_+.01F&&orbitAge_>.15F) {
     const float behind=std::remainder(player.yaw-yaw_,6.2831853F);
     float swing=2.6F;
     if(gapAhead>0&&speed>.5F) swing=std::max(swing,std::abs(behind)/std::max(.15F,gapAhead/speed-.2F));

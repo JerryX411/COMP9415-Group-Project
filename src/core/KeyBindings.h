@@ -19,7 +19,7 @@ struct KeyBindings {
   // exchange, so no key is ever bound twice. Reserved keys are refused.
   bool assign(KeyAction action, int key);
   void reset() { keys = defaults(); }
-  // Esc and Enter drive the menus; F1-F3, 1 and 2 are debug and level shortcuts.
+  // Fixed menu, map, diagnostics and level shortcuts cannot be rebound.
   static bool reserved(int key);
   // Plain "action=glfwKey" lines; unknown or invalid entries keep their defaults.
   bool load(const std::filesystem::path& path);

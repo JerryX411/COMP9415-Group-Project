@@ -9,6 +9,7 @@ namespace craft::app {
 namespace {
 
 constexpr int sides = 64;
+constexpr float fullTurn = 6.283185307F;
 constexpr float worldRadius = 14.F;
 constexpr ImU32 frame = IM_COL32(15, 18, 22, 255);
 constexpr ImU32 empty = IM_COL32(213, 221, 229, 255);
@@ -28,7 +29,7 @@ const std::array<ImVec2,sides>& unitCircle() {
   static const auto points=[] {
     std::array<ImVec2,sides> result{};
     for (int i=0;i<sides;++i) {
-      const float angle=6.283185307F*float(i)/sides;
+      const float angle=fullTurn*float(i)/sides;
       result[i]={std::cos(angle),std::sin(angle)};
     }
     return result;
@@ -101,7 +102,7 @@ void drawHeadingFan(ImDrawList& draw, ImVec2 centre, float yaw, float scale) {
   constexpr float pi = 3.14159265F;
   constexpr float halfAngle = pi / 6.F;
   const float radius = 42.F * scale;
-  // Robot yaw 0 faces world -Z, which is up on the map.
+  // The supplied yaw is relative to the displayed map heading.
   const float angle = -pi / 2.F - yaw;
   const int firstVertex = draw.VtxBuffer.Size;
   draw.PathLineTo(centre);
@@ -120,13 +121,41 @@ void drawHeadingFan(ImDrawList& draw, ImVec2 centre, float yaw, float scale) {
 
 } // namespace
 
+float MinimapHeading::update(float cameraYaw,float dt,int sceneRevision) {
+  constexpr float followRatio = .7F;
+  constexpr float settleDelay = .05F;
+  constexpr float settleRate = 14.F;
+  if (revision_!=sceneRevision) {
+    revision_=sceneRevision;
+    yaw_=previousCameraYaw_=cameraYaw;
+    stillTime_=0;
+    return yaw_;
+  }
+
+  const float turn=std::remainder(cameraYaw-previousCameraYaw_,fullTurn);
+  previousCameraYaw_=cameraYaw;
+  if (turn!=0.F) {
+    stillTime_=0;
+    yaw_=std::remainder(yaw_+followRatio*turn,fullTurn);
+  } else {
+    // A short delay avoids catching up between individual mouse reports.
+    stillTime_=std::min(stillTime_+dt,settleDelay);
+    if (stillTime_>=settleDelay) {
+      const float remaining=std::remainder(cameraYaw-yaw_,fullTurn);
+      yaw_=std::abs(remaining)<.001F?cameraYaw:
+          std::remainder(yaw_+remaining*(1.F-std::exp(-settleRate*dt)),fullTurn);
+    }
+  }
+  return yaw_;
+}
+
 bool MinimapCircle::overlaps(ImVec2 point,float padding) const {
   const float r=radius+padding;
   return radius>0 && lengthSquared({point.x-centre.x,point.y-centre.y})<r*r;
 }
 
-MinimapCircle drawHeliosMinimap(ImDrawList& draw,const relay::Game& game,
-                               ImVec2 display,float scale) {
+MinimapCircle drawMinimap(ImDrawList& draw,const relay::Game& game,
+                               ImVec2 display,float scale,float mapYaw) {
   if(scale<=0)return {};
   const float radius=106.F*scale;
   const ImVec2 centre{display.x-48.F*scale-radius,(132.F+106.F)*scale};
@@ -135,14 +164,20 @@ MinimapCircle drawHeliosMinimap(ImDrawList& draw,const relay::Game& game,
   const int layer=std::clamp(int(std::floor(game.shadowHeight()+.03F)),1,relay::VoxelWorld::size-1);
   const float unit=(radius-1.4F*scale)/worldRadius;
   const float rim=radius-1.4F*scale;
-  const auto delta=[&](glm::vec3 p) {
-    return ImVec2{(p.x-player.position.x)*unit,(p.z-player.position.z)*unit};
+  const float cosine=std::cos(mapYaw),sine=std::sin(mapYaw);
+  const auto rotate=[&](ImVec2 v) {
+    return ImVec2{cosine*v.x-sine*v.y,sine*v.x+cosine*v.y};
   };
-  const auto at=[&](float x,float z) { return plus(centre,delta({x,0,z})); };
+  const auto worldOffset=[&](float x,float z) {
+    return ImVec2{(x-player.position.x)*unit,(z-player.position.z)*unit};
+  };
+  const auto at=[&](float x,float z) { return plus(centre,worldOffset(x,z)); };
+  const auto delta=[&](glm::vec3 p) { return rotate(worldOffset(p.x,p.z)); };
   const auto sameFloor=[&](float height) { return std::abs(height-float(layer))<.55F; };
   const auto fits=[&](ImVec2 v) { const float r=radius-11.F*scale; return lengthSquared(v)<=r*r; };
 
   draw.AddCircleFilled(centre,radius,empty,sides);
+  const int terrainStart=draw.VtxBuffer.Size;
   Polygon disk{};
   for(int i=0;i<sides;++i)disk[i]=plus(centre,times(unitCircle()[i],rim));
   const int x0=std::max(0,int(std::floor(player.position.x-worldRadius)));
@@ -170,8 +205,14 @@ MinimapCircle drawHeliosMinimap(ImDrawList& draw,const relay::Game& game,
     drawTile(draw,centre,rim,disk,at(panel.min.x,panel.min.z),at(panel.max.x,panel.max.z),IM_COL32(109,124,137,255));
   }
 
+  // Rotate only the clipped terrain and door vertices. The grey disc and rim are
+  // separate, and rotating around the centre preserves the circular clip radius.
+  for (int i=terrainStart;i<draw.VtxBuffer.Size;++i) {
+    auto& p=draw.VtxBuffer[i].pos;
+    p=plus(centre,rotate({p.x-centre.x,p.y-centre.y}));
+  }
   draw.Flags=previousFlags;
-  drawHeadingFan(draw, centre, player.yaw, scale);
+  drawHeadingFan(draw,centre,player.yaw-mapYaw,scale);
 
   bool nearbyCore=false;
   ImVec2 nearestCore{};

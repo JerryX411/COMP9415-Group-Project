@@ -551,14 +551,6 @@ void Game::step(float dt,const Input& input) {
  player_.sprinting=input.sprintHeld&&glm::length(movement)>.1F&&!player_.crouching;
  const auto target=movement*(player_.crouching?crouchSpeed:player_.sprinting?sprintSpeed:speed);
  player_.locomotion=glm::mix(player_.locomotion,target,1-std::exp(-18.F*dt));
- float turn=0;
- if(input.facingYaw&&std::isfinite(*input.facingYaw)) {
-  turn=std::remainder(*input.facingYaw-player_.yaw,2*pi);
-  player_.yaw=*input.facingYaw;
- } else if(glm::length(movement)>.01F) {
-  turn=std::remainder(std::atan2(-movement.x,-movement.y)-player_.yaw,2*pi);
-  player_.yaw+=turn*(1-std::exp(-16*dt));
- }
  player_.jumpBuffer=input.jumpPressed?jumpBufferDuration:std::max(0.F,player_.jumpBuffer-dt);
  player_.coyoteTime=player_.grounded?coyoteDuration:std::max(0.F,player_.coyoteTime-dt);
  if(player_.jumpBuffer>0&&player_.coyoteTime>0&&player_.interactionTime<=0&&player_.hitStun<=0&&!player_.crouching) {
@@ -570,6 +562,17 @@ void Game::step(float dt,const Input& input) {
  player_.knockback*=std::exp(-8*dt);
  player_.velocity.x=player_.locomotion.x+player_.knockback.x; player_.velocity.z=player_.locomotion.y+player_.knockback.y;
  moveAxis(0,player_.velocity.x*dt); moveAxis(2,player_.velocity.z*dt);
+ // Collisions can stop horizontal motion, so choose the facing after resolving them.
+ float turn=0;
+ if(input.facingYaw&&std::isfinite(*input.facingYaw)) {
+  if(player_.cameraMode()==CameraMode::Follow) {
+   turn=std::remainder(*input.facingYaw-player_.yaw,2*pi);
+   player_.yaw=*input.facingYaw;
+  }
+ } else if(glm::length(movement)>.01F) {
+  turn=std::remainder(std::atan2(-movement.x,-movement.y)-player_.yaw,2*pi);
+  player_.yaw+=turn*(1-std::exp(-16*dt));
+ }
  player_.velocity.y-=(player_.velocity.y<0?fallGravity:gravity)*dt;
  player_.grounded=false; moveAxis(1,player_.velocity.y*dt);
  // Pads are flush with the floor: feet must actually land/step on their surface.

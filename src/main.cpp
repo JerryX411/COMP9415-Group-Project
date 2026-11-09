@@ -87,6 +87,7 @@ int main(int argc,char** argv) {
     if(screen==Screen::Play) screen=Screen::Pause; else if(screen==Screen::Pause) screen=Screen::Play;
    }
    if(focused&&screen==Screen::Play) {
+    if(game.state()==relay::RunState::Playing&&keys.pressed(GLFW_KEY_M))ui.toggleMinimap();
     if(keys.pressed(GLFW_KEY_F1))options.diagnostics=!options.diagnostics;
     if(keys.pressed(GLFW_KEY_F2)){options.normalMapping=!options.normalMapping;options.normalCompare=false;}
     if(keys.pressed(GLFW_KEY_F3))options.normalCompare=!options.normalCompare;
@@ -139,7 +140,7 @@ int main(int argc,char** argv) {
     if(action==relay::MenuAction::Title)screen=Screen::Title;
     if(action==relay::MenuAction::Quit)window.requestClose();
     if(action==relay::MenuAction::Settings){settingsPause=screen==Screen::Pause;screen=Screen::Settings;}
-   } else { const bool unused=ui.draw({},game,options,renderer,focused); (void)unused; }
+   } else { const bool unused=ui.draw({},game,options,renderer,camera.yaw(),dt); (void)unused; }
    if(int next=ui.takeLevelRequest();next>=0) beginChange(Change::Next,next);
    if(change.t>=0) {
     const auto ease=[](float x){x=std::clamp(x,0.F,1.F);return x*x*(3-2*x);};
