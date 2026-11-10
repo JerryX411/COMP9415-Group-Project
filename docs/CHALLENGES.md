@@ -45,7 +45,7 @@ CoreExplorerLite.exe --benchmark --level 0 --benchmark-output level0.csv
 CoreExplorerLite.exe --benchmark --level 1 --benchmark-output level1.csv
 ```
 
-Build Release before measuring. The tool requires and verifies a 1920x1080 framebuffer, disables VSync, freezes each level after 24 simulation steps of 1/120 seconds on its jump pad (including its active particles), fixes eye=(20,17,38), target=(20,1,19), vertical FOV=50 degrees, near=0.1, far=300, normal mapping ON at strength 1, the same Member B cubemap in both modes. Only hidden-face removal differs between baseline and optimised. Both modes keep the same instancing; it is not claimed as an extra challenge.
+Build Release before measuring. The tool requires and verifies a 1920x1080 framebuffer, disables VSync, freezes each level after 24 simulation steps of 1/120 seconds on its jump pad (including its active particles), fixes eye=(20,17,38), target=(20,1,19), vertical FOV=50 degrees, near=0.1, far=300, normal mapping ON at strength 1, static dark-blue background (no skybox). Only hidden-face removal differs between baseline and optimised. Both modes keep the same instancing; it is not claimed as an extra challenge.
 
 Each row has 60 unmeasured warm-up scene frames and exactly 240 measured frames. Three trials alternate order. CPU wall time brackets the complete scene draw with glFinish synchronization. Loading, mesh construction, static instance upload, gameplay, UI, screenshots and buffer swapping are excluded. All scene geometry and frozen particle draws are included. This measures synchronized scene-render time, not gameplay FPS, CPU update cost or a pure GPU timer query.
 
@@ -53,11 +53,13 @@ CSV rows contain mean ms/frame, submitted triangles, draw calls, solid voxels, e
 
 ## Local measurement record (2026-11-08, before the five-material art pass)
 
-These retained measurements precede the five-material update and the merged cubemap setup; rerun on the final submission build. Windows x64 Release on NVIDIA RTX 4060 Laptop GPU, driver 621.01. Raw rows: `benchmarks/windows-20261108-level0.csv` and `benchmarks/windows-20261108-level1.csv`.
+These retained measurements precede the five-material update and must be rerun for final submission. Windows x64 Release on NVIDIA RTX 4060 Laptop GPU, driver 621.01. Raw rows: `benchmarks/windows-20261108-level0.csv` and `benchmarks/windows-20261108-level1.csv`.
 
 | Scene | Baseline mean of 3 trials (ms) | Optimised mean (ms) | Submitted triangles, before / after | Draw calls |
 |---|---:|---:|---:|---:|
 | Tutorial | 0.367551 | 0.180600 | 68001 / 55037 | 8 / 8 |
 | Obstacle | 0.363275 | 0.189072 | 69437 / 56389 | 8 / 8 |
+
+The Obstacle Yard row is a historical measurement: that level was removed on 2026-11-09, and `--benchmark --level 1` now measures Helios Yard.
 
 The first baseline trial is slower than later ones: retain all raw values rather than selecting the fastest. These figures describe this frozen scene on this machine, not a general FPS promise. The captured baseline/optimised images are not bit-identical: mean absolute per-channel differences are below 0.009 on a 0..255 scale. Inspect the captures alongside timing results; do not claim exact pixel equivalence. Normal strength zero versus OFF was separately verified pixel-identical. Full-resolution captures and verification.json are in the local Challenge-Checks-20261108 output folder.

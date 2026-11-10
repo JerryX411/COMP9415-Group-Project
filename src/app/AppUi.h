@@ -33,6 +33,8 @@ class AppUi {
   void drawDiagnostics(const relay::Game&,const relay::RenderOptions&,const relay::Renderer&,const relay::FollowCamera&,bool frozen);
   // Level the UI asked to load (restart or switch), or -1; reading clears it.
   int takeLevelRequest() { const int level=levelRequest_; levelRequest_=-1; return level; }
+  // Enter on the result screen of the last level: back to the main menu.
+  bool takeMenuRequest() { const bool menu=menuRequest_; menuRequest_=false; return menu; }
   // Training field-manual popup (armour, reboots, lives). While open the game holds and the
   // cursor is free; Esc, the X or the last page's button closes it.
   bool popupOpen() const { return popupPage_>=0; }
@@ -45,6 +47,7 @@ class AppUi {
   int levelRequest_ = -1;
   MinimapHeading minimapHeading_;
   bool minimapVisible_ = true;
+  bool menuRequest_ = false;
   int hudRevision_=-1, hudCoreCount_=0;
   float coreCollectedAt_=-10;
   float prewarmedScale_ = 0;

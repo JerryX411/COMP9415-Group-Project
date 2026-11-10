@@ -110,7 +110,8 @@ std::vector<Vertex> roundPrimitive(bool cylinder,int slices=24,int stacks=14) {
 }
 
 Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), craft::core::assetPath("shaders/relay.frag")),
-    skybox_(craft::core::assetPath("textures/skybox/cross.jpg")) {
+    sky_(craft::core::assetPath("shaders/sky.vert"), craft::core::assetPath("shaders/sky.frag")) {
+  glGenVertexArrays(1,&skyVao_);
   glGenVertexArrays(1,&cubeVao_); glGenVertexArrays(1,&terrainVao_);
   glGenBuffers(1,&cubeBuffer_); glGenBuffers(1,&instanceBuffer_);
   glGenBuffers(1,&terrainBuffer_); glGenBuffers(1,&terrainInstance_);
@@ -161,7 +162,7 @@ Renderer::Renderer() : shader_(craft::core::assetPath("shaders/relay.vert"), cra
   instances_.reserve(1024);
 }
 Renderer::~Renderer() {
-  glDeleteVertexArrays(1,&cubeVao_); glDeleteVertexArrays(1,&terrainVao_);
+  glDeleteVertexArrays(1,&cubeVao_); glDeleteVertexArrays(1,&terrainVao_); glDeleteVertexArrays(1,&skyVao_);
   for (unsigned b : {cubeBuffer_,instanceBuffer_,terrainBuffer_,terrainInstance_}) glDeleteBuffers(1,&b);
   glDeleteTextures(1,&albedo_); glDeleteTextures(1,&normal_);
 }
@@ -179,12 +180,13 @@ void Renderer::rebuildTerrain(const Game& game, bool optimised, bool whitebox) {
     // painted on the floor. The fraction of the surface index is a faint self-glow, so guide trim
     // and beacons still read in shadow.
     float surface=y==0?2.F:y==1?4.F:1.F,glow=0;
-    const bool special=material>=4&&material<=8;
+    const bool special=material>=4&&material<=9;
     if(material==4){colour={.90F,.70F,.46F};surface=5;glow=.12F;}       // soft amber guide trim
     if(material==5){colour={.34F,.84F,.98F};surface=5;glow=.45F;}       // cyan beacon
     if(material==6){colour={.46F,.58F,.60F};surface=5;glow=.04F;}       // faint shortcut mark
     if(material==7){colour={.88F,.77F,.60F};surface=1;}                  // sandstone
     if(material==8){colour={.42F,.47F,.54F};surface=3;}                  // slate
+    if(material==9){colour={1,1,1};surface=9;glow=0;}                   // void floor: crimson cells (relay.frag)
     for(auto n: directions) {
       const bool exposed = world.cell(x+n.x,y+n.y,z+n.z)==0;
       if(exposed) ++stats_.visibleFaces;
@@ -226,20 +228,29 @@ void Renderer::prepare(const Game& game, const RenderOptions& options, float gal
   stats_.instances=int(instances_.size());
   stats_.submittedTriangles=options.gallery||options.menu?0:terrainVertices_/3;
   stats_.drawCalls=options.gallery||options.menu?0:1;
-  // The skybox submits one fullscreen triangle and one draw call.
-  ++stats_.submittedTriangles; ++stats_.drawCalls;
+  // The star sky is one fullscreen triangle and one draw call.
+  if(!options.gallery&&!options.menu) { ++stats_.submittedTriangles; ++stats_.drawCalls; }
   for(int i=0;i<groups;++i) if(instanceCount_[i]) { stats_.submittedTriangles+=instanceCount_[i]*meshCount_[i%primitives]/3; ++stats_.drawCalls; }
+}
+void Renderer::drawSky(const glm::mat4& viewProjection, bool screenSpace, float aspect, float time) {
+  glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
+  sky_.use();
+  sky_.setMat4("uInverseViewProjection",glm::inverse(viewProjection));
+  sky_.setInt("uScreenSpace",screenSpace?1:0); sky_.setFloat("uAspect",aspect); sky_.setFloat("uTime",time);
+  glBindVertexArray(skyVao_); glDrawArrays(GL_TRIANGLES,0,3); glBindVertexArray(0);
+  glDepthMask(GL_TRUE); glEnable(GL_DEPTH_TEST);
 }
 void Renderer::drawMenuBackground(int width, int height, float time) {
   if (width <= 0 || height <= 0) return;
   glViewport(0, 0, width, height);
-  glClearColor(0, 0, 0, 1);
+  glClearColor(.025F,.04F,.065F,1);
   glDepthMask(GL_TRUE);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  const float yaw = time * .025F;
-  const auto projection = glm::perspective(glm::radians(65.F), float(width) / height, .1F, 100.F);
-  const auto view = glm::lookAt(glm::vec3(0), glm::vec3(std::sin(yaw), .15F, -std::cos(yaw)), glm::vec3(0,1,0));
-  skybox_.draw(projection * view);
+  // The title screen looks out at the night sky, turning very slowly.
+  const float aspect=float(width)/float(height),yaw=time*.012F;
+  const auto projection=glm::perspective(glm::radians(60.F),aspect,.1F,100.F);
+  const auto view=glm::lookAt(glm::vec3(0),glm::vec3(std::sin(yaw),.28F,-std::cos(yaw)),glm::vec3(0,1,0));
+  drawSky(projection*view,false,aspect,time);
 }
 void Renderer::draw(int width, int height, const RenderOptions& options, const FollowCamera& camera) {
   const float aspect=float(width)/float(height);
@@ -290,13 +301,13 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
   glViewport(0,0,width,height);
   if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.025F,.04F,.065F,1);
   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-  skybox_.draw(viewProjection_);
+  if(!options.menu&&!options.gallery) drawSky(viewProjection_,options.overview&&!options.customView,aspect,menuTime_);
   glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDisable(GL_BLEND);
   shader_.use(); shader_.setMat4("uViewProjection",viewProjection_); shader_.setVec3("uEye",eye);
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);
   shader_.setInt("uNormalCompare",options.normalCompare?1:0);
   shader_.setFloat("uNormalStrength",options.normalStrength);shader_.setFloat("uSplitX",float(width)*.5F);
-  shader_.setVec3("uFogColour",fog); shader_.setFloat("uFogDensity",fogDensity);
+  shader_.setVec3("uFogColour",fog); shader_.setFloat("uFogDensity",fogDensity); shader_.setFloat("uTime",menuTime_);
   // The camera may pass the map edge (see FollowCamera): cut away the boundary wall it is behind.
   const bool cutaway=!options.gallery&&!options.menu&&sceneGame_;
   shader_.setInt("uCutaway",cutaway?1:0);

@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace relay {
-// A level as the map editor (RelayEditor) edits it; Lite reads assets/levels/helios_yard.txt.
+// An authored voxel level; Lite reads tutorial_showcase.txt and helios_yard.txt from assets/levels.
 // Positions are floor coordinates (x, z); heights are fixed by each object type, except doors
 // and plates, which keep the level they stand on. The voxels
 // are `height` layers above the floor (y = 1..height, 3 to 16) inside the room, so a map can have
@@ -20,10 +20,15 @@ struct LevelData {
   // Guidance and district materials: amber guide trim, cyan beacon, faint teal shortcut mark,
   // sandstone and slate walls. Any of them can also paint the floor.
   enum : std::uint8_t { Guide = 4, Beacon = 5, Hint = 6, Sandstone = 7, Slate = 8 };
-  struct Trap { glm::vec2 min{}, max{}; float offset = 0; };
+  // Floor paint only: the abyss under a parkour run. Landing on it is a fall (see Game::fallBack).
+  enum : std::uint8_t { Void = 9 };
+  // Traps and movers take an optional level like doors (1: the ground; N: on layer N - 1).
+  // `random` (written as a trailing word after the level): the plate fires on its own random
+  // schedule instead of the fixed 6 s beat (see Game::trapPhase).
+  struct Trap { glm::vec2 min{}, max{}; float offset = 0; int level = 1; bool random = false; };
   struct Switch { glm::vec2 at{}; int trap = 0; };
   struct Checkpoint { glm::vec2 at{}, respawn{}; };
-  struct Mover { glm::vec2 a{}, b{}; float period = 4, offset = 0; };
+  struct Mover { glm::vec2 a{}, b{}; float period = 4, offset = 0; int level = 1; };
   // A blast door across a wall opening: halfWidth along x (or z when alongZ). `level` is the
   // layer its sill stands on: 1 is the ground; on level N the door fills layers N and N + 1 and
   // stands on the blocks of layer N - 1 (an upper floor). Plates use the same levels.

@@ -2,7 +2,6 @@
 #include <vector>
 #include "graphics/RelayModels.h"
 #include "graphics/Shader.h"
-#include "graphics/Skybox.h"
 #include "core/FollowCamera.h"
 
 namespace relay {
@@ -42,8 +41,10 @@ class Renderer {
   const RenderStats& stats() const { return stats_; }
  private:
   void rebuildTerrain(const Game& game, bool optimised, bool whitebox);
-  craft::graphics::Shader shader_;
-  Skybox skybox_;
+  // Procedural star sky (assets/shaders/sky.*): one fullscreen triangle behind everything.
+  void drawSky(const glm::mat4& viewProjection, bool screenSpace, float aspect, float time);
+  craft::graphics::Shader shader_, sky_;
+  unsigned skyVao_ = 0;
   SceneModels models_;
   std::vector<Instance> instances_;
   unsigned cubeVao_ = 0, cubeBuffer_ = 0, instanceBuffer_ = 0;

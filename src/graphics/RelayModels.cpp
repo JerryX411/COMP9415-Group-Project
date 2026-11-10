@@ -425,6 +425,23 @@ void appendTrapPlate(const FloorTrap& trap, TrapPhase phase, float time, int see
   }
 }
 
+void SceneModels::appendCheckpoint(const Checkpoint& c, float time, std::vector<Instance>& out) {
+  // A slim beacon at the side of the run: dark base, white post and a lamp ring. Amber and slow
+  // while waiting, mint once it holds the respawn point, with a soft column of light and a pulse
+  // ring when it switches on.
+  const glm::vec3 p = c.position, lamp = c.active ? glm::vec3(.35F, 1, .85F) : glm::vec3(1, .62F, .2F);
+  appendBox(out, p + glm::vec3(0, .06F, 0), {.9F, .12F, .9F}, dark, 0, 1); out.back().primitive = Primitive::Cylinder;
+  appendBox(out, p + glm::vec3(0, .7F, 0), {.16F, 1.2F, .16F}, shell, 0, 1); out.back().primitive = Primitive::Cylinder;
+  const float glow = c.active ? .9F : .35F + .25F * std::sin(time * 3.F);
+  appendBox(out, p + glm::vec3(0, 1.36F, 0), {.34F, .12F, .34F}, lamp, glow, 1); out.back().primitive = Primitive::Cylinder;
+  appendGlow(out, p + glm::vec3(0, 1.36F, 0), glm::vec3(.5F), lamp, c.active ? .45F : .2F, 1.4F);
+  if (!c.active) return;
+  out.push_back({glm::scale(glm::translate(glm::mat4(1), p + glm::vec3(0, 1.6F, 0)), {.5F, 3.F, .5F}), glm::vec4(lamp, .1F), {1, 1.8F, 0, 1}, Primitive::Cylinder, Blend::Additive});
+  if (c.activeAge < .6F) {
+    const float k = c.activeAge / .6F;
+    appendGlow(out, p + glm::vec3(0, .1F, 0), glm::vec3(.6F + 2.2F * k, .06F, .6F + 2.2F * k), lamp, .6F * (1 - k), 2.F);
+  }
+}
 void SceneModels::appendSwitch(glm::vec3 position, bool active, float press, std::vector<Instance>& out) {
   appendBox(out, position + glm::vec3(0, .09F, 0), {.75F, .18F, .65F}, dark, 0, 1);
   appendBox(out, position + glm::vec3(0, .46F, 0), {.48F, .62F, .4F}, shell, 0, 1); out.back().primitive=Primitive::Cylinder;
@@ -504,6 +521,27 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
  for(const auto& plate:game.plates()) appendPlate(plate,game.doors()[std::size_t(plate.door)].hold,game.elapsed(),out);
  for(const auto& door:game.doors()) appendDoor(door,game.elapsed(),out);
  for(const auto& link:game.portals()) appendPortal(link,game.elapsed(),out);
+ for(const auto& c:game.checkpoints()) appendCheckpoint(c,game.elapsed(),out);
+ {
+  // Over the void floor around the courier: glowing crimson embers and dark ash flakes drift up,
+  // sway and fade, like the full edition's crimson tiles. Drawn from the clock (no particles).
+  const float time=game.elapsed();
+  const glm::vec3 me=game.player().position;
+  for(int i=0;i<64;++i) {
+   const float h=std::fmod(float(i)*.618034F,1.F),k=std::fmod(float(i)*.754878F+.31F,1.F);
+   const float speed=.22F+.2F*k,life=std::fmod(time*speed+h,1.F),fade=std::sin(life*3.14159F);
+   // Each one rises from its own spot on a 24 x 24 patch that follows the courier in whole cells.
+   const float cx=std::floor(me.x)-12.F+24.F*h,cz=std::floor(me.z)-12.F+24.F*std::fmod(k+h*.37F,1.F);
+   if(game.world().cell(int(std::floor(cx)),0,int(std::floor(cz)))!=LevelData::Void||game.world().cell(int(std::floor(cx)),1,int(std::floor(cz)))) continue;
+   const float sway=std::sin(time*(1.3F+k)+float(i))*.18F*life;
+   const glm::vec3 at(cx+sway,1.06F+1.9F*life,cz+sway*.6F);
+   if(i%3==2) appendBox(out,at,glm::vec3(.08F+.05F*k,.012F,.06F+.04F*h),{.05F,.01F,.015F},0,0,time*(2.F+2.F*k)+float(i));
+   else {
+    const float flick=.7F+.3F*std::sin(time*23.F+float(i)*3.1F);
+    appendGlow(out,at,glm::vec3((.08F+.05F*k)*(1.2F-.6F*life)),i%4==0?glm::vec3(1,.3F,.25F):glm::vec3(.9F,.04F,.1F),fade*flick,2.F);
+   }
+  }
+ }
  for(const auto& h:game.movers()) {
   const auto parts=h.collisionParts();
   for(std::size_t i=0;i<parts.size();++i) appendBox(out,(parts[i].min+parts[i].max)*.5F,parts[i].max-parts[i].min,i==0?dark:i==1?red:amber,i==0?0:.2F,1);

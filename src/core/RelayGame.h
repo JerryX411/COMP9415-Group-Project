@@ -100,7 +100,7 @@ struct Player {
 };
 struct JumpPad { glm::vec3 position{}; float cooldown=0, pulse=0; };
 struct Core { glm::vec3 position{}; bool collected = false; };
-// Beacon a courier activates with E; after a destroying blow it reboots at the last one.
+// Checkpoint beacon (parkour run): passing it saves the spot; a fall into the void returns there.
 struct Checkpoint {
   glm::vec3 position{};  // Pylon centre on the floor.
   glm::vec3 respawn{};   // Clear floor beside the pylon.
@@ -176,6 +176,7 @@ struct FloorTrap {
   Bounds area{};
   float cycleOffset = 0.0F;
   float disabledFor = 0.0F;
+  bool random = false;  // Fires on its own random schedule (Game::trapPhase).
   static constexpr float tileWidth = .92F, surfaceHeight = .1075F;
   Bounds tileBounds(float x, float z) const;
   bool touchesFeet(glm::vec3 feet, float radius) const;
@@ -226,11 +227,16 @@ class Game {
  static constexpr float coyoteDuration=.10F,jumpBufferDuration=.12F;
  // Shift sprint (from the full edition); padSpeed only calibrates poses here.
  static constexpr float sprintSpeed=8.4F,padSpeed=14;
- static constexpr int levelCount=3,heliosLevel=2;
+ // Levels: 0 tutorial showcase, 1 Helios Yard, 2 Corona Run (Obstacle Yard was removed on 2026-11-09).
+ static constexpr int levelCount=3,heliosLevel=1,runLevel=2;
  static constexpr float doorHold=4.F,plateRadius=.75F,portalRadius=.7F,portalCooldown=1.F;
  static constexpr bool missionsUnlocked=true;
+ // Lives (as in the full edition): each level gives three. Losing all five armour cells costs a life
+ // and reboots the robot at the last checkpoint (or the start) with full armour after
+ // respawnDelay; losing the last life restarts the level. The tutorial yard never runs out.
+ static constexpr int livesPerLevel=3; static constexpr float respawnDelay=2.2F;
  Game(); void reset(int level); void update(float seconds,const Input& input);
- // Loads a level file (Helios Yard) into the current level slot.
+ // Loads a level file (tutorial showcase or Helios Yard) into the current level slot.
  void applyLevel(const LevelData& data);
  // Standing height on top of whatever is built at (x, z), from the floor up.
  float surfaceAt(float x,float z) const;
@@ -256,8 +262,8 @@ class Game {
  static constexpr float challengeTimeLimit=120.F;
  bool timedLevel() const{return level_!=0;}
  float timeLimit() const{return timeLimit_;}
- // Helios Yard plays as a full-edition mission: no words in the HUD, a door glyph marks the exit.
- bool wordless() const{return level_==heliosLevel;}
+ // Every level uses the graphics-only HUD (the text hints only served the removed Obstacle Yard).
+ bool wordless() const{return true;}
  float timeRemaining() const{return remaining_;}
  bool timedOut() const{return timedLevel()&&remaining_<=0&&state_==RunState::Lost;}
  float elapsed() const{return elapsed_;} Bounds room() const{return room_;} glm::vec3 spawnPoint() const{return spawn_;}
@@ -268,6 +274,10 @@ class Game {
  const std::vector<PortalLink>& portals() const{return portals_;} const std::vector<Pickup>& pickups() const{return pickups_;}
  const std::vector<SpeedPad>& speedPads() const{return pads_;} const std::vector<BlastDoor>& doors() const{return doors_;}
  const std::vector<PressurePlate>& plates() const{return plates_;} int teleports() const{return teleports_;}
+ int falls() const{return falls_;} glm::vec3 respawnPoint() const{return respawn_;}
+ int lives() const{return lives_;} bool livesLimited() const{return timedLevel();}
+ bool respawning() const{return state_==RunState::Lost&&respawnPending_;}
+ bool outOfLives() const{return state_==RunState::Lost&&player_.health<=0&&!respawnPending_;}
  int collectedCount() const; int liveParticleCount() const; bool gateUnlocked() const; float boostMeter() const;
  bool jetting() const{return false;}
  private:
@@ -278,13 +288,19 @@ class Game {
  void updateMovers(float dt); bool separateFromMover(std::size_t index);
  void updateInteraction(float dt,bool pressed);
  void updateDoors(float dt); void updatePortals(float dt); void activatePortal(int code);
+ // Parkour run: checkpoints save the respawn spot; landing on void floor costs one armour cell
+ // and returns the courier there.
+ void updateCheckpoints(float dt); void fallBack();
+ void beginDeath(); void reboot();
  void buildYard(); void emitBurst(glm::vec3 at,glm::vec3 colour,int count);
  void applyDamage(glm::vec3 source,int sourceId,bool launch=true,DamageKind kind=DamageKind::Blunt);
  VoxelWorld world_; Player player_; RunState state_=RunState::Playing;
  int level_=0,revision_=0,wallHeight_=3,interactionIndex_=-1;
  bool crouchToggle_=false,interactionCommitted_=false;
  Bounds room_{{4,1,4},{36,4,36}}; glm::vec3 spawn_{8,1,25},gate_{32,1,7};
- float timeLimit_=challengeTimeLimit,portalWait_=0; int portalHold_=-1,teleports_=0;
+ float timeLimit_=challengeTimeLimit,portalWait_=0; int portalHold_=-1,teleports_=0,falls_=0,lives_=livesPerLevel;
+ bool respawnPending_=false;
+ glm::vec3 respawn_{8,1,25};
  std::vector<PressurePlate> plates_;
  float elapsed_=0,remaining_=0,gateOpen_=0,hitStop_=0,messageTime_=0;
  std::string message_;
