@@ -269,6 +269,10 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
     const float fov=glm::radians(aspect<1.45F?44.F:36.F);
     viewProjection_=glm::perspective(fov,aspect,.1F,120.F)*glm::lookAt(eye,target,{0,1,0});
     fog={.88F,.90F,.91F}; fogDensity=.022F;
+  } else if(camera.surveillance()&&!options.gallery) {
+    viewProjection_=camera.viewProjection(aspect);
+    // A large yard should not wash out when the camera pulls back to fit it.
+    fogDensity=.00035F;
   } else if(options.gallery||options.overview) {
     // The overview frames the whole room (the training ground is about twice a mission's size).
     const Bounds room=sceneGame_?sceneGame_->room():Bounds{{4,1,4},{28,4,28}};
@@ -296,12 +300,12 @@ void Renderer::draw(int width, int height, const RenderOptions& options, const F
     }
     viewProjection_=glm::perspective(glm::radians(58.F),aspect,.06F,100.F)*glm::lookAt(eye,target,{0,1,0});
   } else {
-    viewProjection_=glm::perspective(glm::radians(camera.fov()),aspect,.06F,180.F)*glm::lookAt(eye,camera.target(),camera.up());
+    viewProjection_=camera.viewProjection(aspect);
   }
   glViewport(0,0,width,height);
   if(options.menu) glClearColor(fog.r,fog.g,fog.b,1); else glClearColor(.025F,.04F,.065F,1);
   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-  if(!options.menu&&!options.gallery) drawSky(viewProjection_,options.overview&&!options.customView,aspect,menuTime_);
+  if(!options.menu&&!options.gallery) drawSky(viewProjection_,(options.overview||camera.surveillance())&&!options.customView,aspect,menuTime_);
   glEnable(GL_DEPTH_TEST); glEnable(GL_CULL_FACE); glCullFace(GL_BACK); glDisable(GL_BLEND);
   shader_.use(); shader_.setMat4("uViewProjection",viewProjection_); shader_.setVec3("uEye",eye);
   shader_.setInt("uAlbedo",0); shader_.setInt("uNormal",1); shader_.setInt("uNormalMapping",options.normalMapping?1:0);

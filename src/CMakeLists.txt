@@ -91,3 +91,8 @@ add_custom_command(TARGET Craft POST_BUILD
             "$<TARGET_FILE_DIR:Craft>/assets"
     COMMENT "Copying runtime assets"
 )
+
+# Optional local authoring tools; source distributions work without this directory.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/editor/CMakeLists.txt")
+    add_subdirectory(editor)
+endif()

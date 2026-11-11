@@ -502,9 +502,9 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
  }
  for(const auto& pad:game.jumpPads()) {
   appendBox(out,pad.position+glm::vec3(0,.012F,0),{1.8F,.024F,1.8F},dark,0,.6F);
-  appendBox(out,pad.position+glm::vec3(0,.03F,0),{1.5F,.024F,1.5F},{.07F,.32F,.4F},.15F);
-  for(float z:{-.35F,.25F}) for(float side:{-1.F,1.F})
-   appendBox(out,pad.position+glm::vec3(side*.23F,.05F,z),{.65F,.03F,.13F},mint,.5F+pad.pulse*.5F,0,side*.65F);
+  appendBox(out,pad.position+glm::vec3(0,.03F,0),{1.5F,.024F,1.5F},{.07F,.32F,.4F},.1F+pad.pulse*.36F);
+  // Surface 6 paints antialiased concentric rings in the shader, without extra geometry.
+  out.back().material.w=6.F;
   if(pad.pulse>0)appendGlow(out,pad.position+glm::vec3(0,.1F,0),{1.8F,.16F,1.8F},mint,.18F*pad.pulse,.4F);
  }
  const auto g=game.gatePosition();

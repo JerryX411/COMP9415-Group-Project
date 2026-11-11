@@ -1,8 +1,12 @@
 #include "core/FollowCamera.h"
 #include <algorithm>
 #include <cmath>
+#include <glm/gtc/matrix_transform.hpp>
 namespace relay {
 void FollowCamera::reset(const Game& game) {
+  // Entering/restarting a level always starts in third person. V opts into the
+  // global camera for the current run; ordinary checkpoint recovery uses update.
+  surveillance_=false;
   // Start behind the courier's facing (the missions face north, training faces east).
   yaw_=game.player().yaw+.4F; pitch_=.52F; distance_=actualDistance_=8;
   trauma_=0; shake_=glm::vec3(0); lastHurt_=game.player().hurtCooldown; lastLandAge_=10; lastHitAge_=game.player().motion.hitAge; lastSlideAge_=game.player().motion.slideAge; lastPopAge_=game.player().motion.popAge; lastBoostAge_=game.player().motion.boostAge; lastBounceAge_=game.player().motion.bounceAge; lastTakeoffAge_=game.player().motion.takeoffAge; lastTrickAge_=game.player().motion.trickAge; lastShieldBreak_=game.player().motion.shieldBreakAge; lastJetAge_=game.player().motion.jetAge; lastPushAge_=game.player().motion.pushAge; tunnel_=tunnelLook_=exitHold_=exitLift_=0; orbitAge_=10; wasLost_=game.state()==RunState::Lost;
@@ -11,23 +15,72 @@ void FollowCamera::reset(const Game& game) {
   target_=game.player().position+glm::vec3(0,1.1F,0);
   update(game,1.F);
 }
+void FollowCamera::setSurveillance(bool enabled,const Game& game) {
+  if(enabled==surveillance_)return;
+  surveillance_=enabled;
+  if(enabled)placeSurveillance(game);
+  else {
+    // Resume beside the current player, retaining the user's orbit and zoom;
+    // discard old impulses rather than replaying hits that happened off camera.
+    const float oldYaw=yaw_,oldPitch=pitch_,oldDistance=distance_;
+    reset(game); yaw_=oldYaw; pitch_=oldPitch; distance_=actualDistance_=oldDistance;
+    update(game,1.F);
+  }
+}
+void FollowCamera::placeSurveillance(const Game& game) {
+  fixedRevision_=game.revision();
+  const auto room=game.room();
+  // Include raised floors, perimeter walls and headroom for pad jumps. Static
+  // bounds keep the shot unchanged when the courier jumps or respawns.
+  int top=1;
+  for(int y=LevelData::maxHeight;y>=1&&top==1;--y)
+    for(int z=int(room.min.z)-1;z<=int(room.max.z);++z)
+      for(int x=int(room.min.x)-1;x<=int(room.max.x);++x)
+        if(game.world().cell(x,y,z))top=y+1;
+  const glm::vec3 lo(room.min.x-1,0,room.min.z-1);
+  const glm::vec3 hi(room.max.x+1,float(top)+6,room.max.z+1);
+  fixedTarget_=(lo+hi)*.5F;
+  fixedYaw_=0; // North stays up; WASD matches the map axes.
+  const float reach=glm::length(hi-lo)*1.6F;
+  fixedEye_=fixedTarget_+glm::normalize(glm::vec3(0,1,.45F))*reach;
+  fixedFar_=reach+glm::length(hi-lo)+20;
+  const auto view=glm::lookAt(fixedEye_,fixedTarget_,glm::vec3(0,1,0));
+  fixedHalfWidth_=fixedHalfHeight_=0;
+  for(int i=0;i<8;++i) {
+    const auto p=view*glm::vec4(i&1?hi.x:lo.x,i&2?hi.y:lo.y,i&4?hi.z:lo.z,1);
+    fixedHalfWidth_=std::max(fixedHalfWidth_,std::abs(p.x));
+    fixedHalfHeight_=std::max(fixedHalfHeight_,std::abs(p.y));
+  }
+}
+glm::mat4 FollowCamera::viewProjection(float aspect) const {
+  aspect=std::max(.1F,aspect);
+  if(!surveillance_)return glm::perspective(glm::radians(fov()),aspect,.06F,180.F)*glm::lookAt(eye(),target(),up());
+  // Fit every corner inside x +/- .91 and y [-.84, .65] in NDC, leaving
+  // asymmetric space above the map for the health, clock and mode indicator.
+  const float h=std::max(fixedHalfHeight_/.745F,fixedHalfWidth_/(aspect*.91F));
+  return glm::ortho(-h*aspect,h*aspect,-.905F*h,1.095F*h,.1F,fixedFar_)*glm::lookAt(fixedEye_,fixedTarget_,glm::vec3(0,1,0));
+}
 void FollowCamera::orbit(float x,float y) {
+  if(surveillance_)return;
   if(x!=0||y!=0) orbitAge_=0;
   // Inside a tunnel shot vertical mouse input tilts the low view directly.
   if(tunnel_>0) tunnelLook_=std::clamp(tunnelLook_+y*.0016F,-.06F,.4F);
   yaw_=std::remainder(yaw_-x*.0016F,6.2831853F);
   pitch_=std::clamp(pitch_+y*.0016F,.12F,1.22F);
 }
-void FollowCamera::zoom(float wheel) { distance_=std::clamp(distance_-wheel*.7F,3.5F,13.F); }
+void FollowCamera::zoom(float wheel) { if(!surveillance_)distance_=std::clamp(distance_-wheel*.7F,3.5F,13.F); }
 glm::vec2 FollowCamera::movement(float right,float forward) const {
-  return glm::vec2(std::cos(yaw_),-std::sin(yaw_))*right-glm::vec2(std::sin(yaw_),std::cos(yaw_))*forward;
+  const float angle=yaw();
+  return glm::vec2(std::cos(angle),-std::sin(angle))*right-glm::vec2(std::sin(angle),std::cos(angle))*forward;
 }
 glm::vec3 FollowCamera::up() const {
+  if(surveillance_)return {0,1,0};
   const auto forward=glm::normalize(target()-eye());
   const auto right=glm::normalize(glm::cross(forward,glm::vec3(0,1,0)));
   return glm::normalize(glm::cross(right,forward)*std::cos(roll_)+right*std::sin(roll_));
 }
 void FollowCamera::update(const Game& game,float dt) {
+  if(surveillance_) { if(fixedRevision_!=game.revision())placeSurveillance(game); return; }
   const auto& a=game.player().motion;
   const bool lost=game.state()==RunState::Lost;
   // Lite damage: one small ~0.14-second shake, without lens zoom or a dolly kick.
