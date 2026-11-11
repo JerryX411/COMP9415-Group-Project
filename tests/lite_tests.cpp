@@ -117,11 +117,11 @@ int main(){try{
   g.reset(level);check(g.collectedCount()==0&&!g.gateUnlocked()&&g.gateOpen()==0&&g.state()==relay::RunState::Playing,"Restart clears progress");
  }
  g.reset(0);g.warpPlayer({29.5F,2.5F,10});check(g.nearestCore()<0,"Core cannot be collected through the raised platform");
- // ---- Helios Yard (synced from the full edition's Level 1) ----
+ // ---- Helios Yard (shortened Lite layout) ----
  {
   relay::Game y; y.reset(relay::Game::heliosLevel);
   check(y.level()==relay::Game::heliosLevel&&std::string(y.levelName())=="HELIOS YARD","Helios Yard loads as level 2");
-  check(y.cores().size()==7&&y.doors().size()==17&&y.plates().size()==19&&y.traps().size()==48&&y.movers().size()==6&&y.portals().size()==1&&y.jumpPads().size()==1,"Helios Yard pieces");
+  check(y.cores().size()==4&&y.doors().size()==6&&y.plates().size()==6&&y.traps().size()==48&&y.movers().size()==6&&y.portals().size()==1&&y.jumpPads().size()==1,"Helios Yard: four retained districts and their mechanisms");
  {
   // The big shock floor fires at random: each plate on its own schedule, always warning first, with
   // at least a second of safe floor between shocks; the small plates keep the fixed beat.
@@ -147,7 +147,7 @@ int main(){try{
   check(warnFirst&&restOk&&outOfStep&&starts.size()>10&&spread>1.F,(std::string("Random plates warn first, rest a second, fire out of step and drift (warn ")+std::to_string(warnFirst)+" rest "+std::to_string(shortestRest)+" step "+std::to_string(outOfStep)+" starts "+std::to_string(starts.size())+" spread "+std::to_string(spread)+")").c_str());
  }
   check(y.timedLevel()&&y.timeRemaining()==600&&y.wordless(),"Helios Yard: 10-minute mission without HUD words");
-  check(y.gatePosition()==glm::vec3(46,1,6)&&y.room().max.x==88,"Helios Yard room and exit");
+  check(y.gatePosition()==glm::vec3(46,1,6)&&y.room().max.x==88&&y.room().max.z==64,"Helios Yard compact room and retained exit");
   advance(y,.2F);check(y.player().grounded&&!y.playerIntersectsScene()&&y.player().health==5,"Helios spawn is clear");
   // Materials and floor paint arrive in the voxel world.
   int special=0;for(int z=4;z<88;++z)for(int x=4;x<88;++x)for(int h=0;h<12;++h){const auto m=y.world().cell(x,h,z);if(m>=4&&m<=8)++special;}

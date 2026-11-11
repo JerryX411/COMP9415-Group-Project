@@ -4,23 +4,34 @@ namespace relay {
 // Orbit camera: target follows the courier; input movement uses its horizontal basis.
 class FollowCamera {
  public:
-  void reset(const Game& game);
+  void reset(const Game& game); // New level/restart: third-person follow by default.
   void orbit(float pixelsX,float pixelsY);
   void zoom(float wheel);
   void update(const Game& game,float dt);
+  // A stationary orthographic view of the entire level, independent of the
+  // courier's position. Projection fits the map and HUD at any window aspect.
+  void setSurveillance(bool enabled,const Game& game);
+  bool surveillance() const { return surveillance_; }
+  glm::mat4 viewProjection(float aspect) const;
   glm::vec2 movement(float right,float forward) const;
   // Shake mostly moves the aim point, so the eye stays clear of walls; the impact
   // kick moves both and springs back.
-  glm::vec3 eye() const { return eye_ + shake_ * .35F + kick_ + drift_; }
-  glm::vec3 target() const { return target_ + shake_ + kick_ * .4F; }
+  glm::vec3 eye() const { return surveillance_?fixedEye_:eye_ + shake_ * .35F + kick_ + drift_; }
+  glm::vec3 target() const { return surveillance_?fixedTarget_:target_ + shake_ + kick_ * .4F; }
   // Up vector with the shake roll applied about the view axis.
   glm::vec3 up() const;
   // Vertical field of view in degrees, punched in on pickups and out on hits.
-  float fov() const { return 58.F + fovKick_ + fovSprint_; }
-  float yaw() const { return yaw_; }
+  float fov() const { return surveillance_?52.F:58.F + fovKick_ + fovSprint_; }
+  float yaw() const { return surveillance_?fixedYaw_:yaw_; }
   float pitch() const { return pitch_; }
   float distance() const { return distance_; }
  private:
+  void placeSurveillance(const Game& game);
+  bool surveillance_=false;
+  int fixedRevision_=-1;
+  glm::vec3 fixedEye_{},fixedTarget_{};
+  float fixedYaw_=0;
+  float fixedHalfWidth_=1,fixedHalfHeight_=1,fixedFar_=300;
   glm::vec3 eye_{},target_{};
   float yaw_=.4F,pitch_=.52F,distance_=8.F,actualDistance_=8.F;
   // Trauma rises on hits, pickups, heavy landings and shutdown, then decays; shake is its square.

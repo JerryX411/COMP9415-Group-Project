@@ -1,0 +1,52 @@
+Core Explorer Lite report evidence - 12 November 2026
+
+Authoritative source: E:\CodexWorkspace\Projects\Core-Explorer-Lite
+Revision: 1af555e plus the pre-existing local source/level changes.
+source-sha256.txt records the implementation, tests and assets used for this report.
+The report task did not modify game code, map files or test expectations.
+
+Build: E:\CodexWorkspace\.cache\temp\lite-fixed-camera-build-20261110
+Configuration: Release, MinGW Makefiles, GCC 16.2.0.
+Built targets: Craft (output CoreExplorerLite.exe), lite_tests, showcase_tests,
+corona_tests, surveillance_tests, helios_tests. All target builds completed.
+The editor executable was not rebuilt by the report task.
+
+CTest: 2 of 6 registered suites passed. See ctest.txt.
+Passed: tutorial_showcase, surveillance_camera.
+Failed: lite_editor_workflow, lite_gameplay, corona_run, helios_four_core_route.
+Current Corona map contains 9 cores, 6 movers, 4 checkpoints, 4 jump pads;
+the Corona structure test expects 10 cores and at least 8 movers.
+Current Helios map contains 5 doors and 5 plates; structural tests expect 6.
+The Helios bot also fails at the indexed west inner plate. This does not alone
+prove human traversal is impossible; the route and its object-index assumptions
+must be reconciled with the current map, then checked end-to-end.
+Do not describe the current snapshot as passing the full regression suite.
+VLAB/CSE build and full mission play-through have not been verified here.
+
+Benchmarks: tutorial.csv, helios.csv, corona.csv.
+Each has three repeats per mode, each with 60 warm-up and 240 measured frames.
+The GPU/driver, resolution, camera, state and counts are recorded in each CSV.
+Summary statistics and image-difference metrics are in summary.json.
+Timing includes scene draw and glFinish completion; excludes prepare/UI/swap.
+The map editor remained open on the same desktop throughout these measurements.
+Results are local fixed-view measurements, not total gameplay frame times.
+The first baseline/optimized image pair is retained beside each CSV.
+
+Visual evidence was captured directly by CoreExplorerLite.exe from the source
+root using --capture. Event log observations: core=20 particles, impact=24
+particles and health=4, pad=35 particles, run=15 particles; no GL error reported.
+Interactive --freeze stops simulation but not wall-clock-driven sky/UI effects.
+normal-zero.png and normal-off.png are therefore not exactly equal as whole
+images; the report does not claim that they are. The zero-strength shader branch
+itself retains the geometric normal.
+
+Writing: Member A/B role descriptions follow ProjectPlan.pdf as requested.
+Real-name aliases follow the plan; no student IDs have been invented.
+Technical reflection paragraphs are a draft for the two members to review.
+The report states the implementation's changes from the original plan.
+
+Rebuild PDF with TeX Live from report/:
+pdflatex -interaction=nonstopmode -halt-on-error -jobname=Report -output-directory=E:/CodexWorkspace/.cache/temp/lite-report-build main.tex
+Run twice when references or layout change, then review the rendered six pages.
+Final delivery is the repository-root Report.pdf; editable source is main.tex.
+reproduce.ps1 reruns benchmarks/captures into a separate E-drive temp folder.

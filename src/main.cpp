@@ -18,10 +18,11 @@
 #include <GLFW/glfw3.h>
 int main(int argc,char** argv) {
  try {
-  int frames=0,level=0; bool paused=false,play=false,benchmark=false,frozen=false,diagnostics=false,normal=true,compare=false,overview=false,nextLevel=false; glm::vec3 warp{-1}; float face=0; std::string capture,benchmarkOutput,effect,changeArg; float normalStrength=1;
+  int frames=0,level=0; bool paused=false,play=false,benchmark=false,frozen=false,diagnostics=false,normal=true,compare=false,overview=false,nextLevel=false,surveillance=false; glm::vec3 warp{-1}; float face=0; std::string capture,benchmarkOutput,effect,changeArg; float normalStrength=1;
   for(int i=1;i<argc;++i) {
    std::string arg=argv[i];
    if(arg=="--play") play=true;
+   else if(arg=="--surveillance") {surveillance=true;play=true;}
    else if(arg=="--frames"&&i+1<argc) frames=std::stoi(argv[++i]);
    else if(arg=="--level"&&i+1<argc) level=std::clamp(std::stoi(argv[++i]),0,relay::Game::levelCount-1);
    else if(arg=="--overview") overview=true;
@@ -64,6 +65,7 @@ int main(int argc,char** argv) {
   if(warp.x>=0){game.warpPlayer(warp);for(int i=0;i<12;++i)game.update(1.F/120,{});}
   relay::Renderer renderer; relay::FollowCamera camera; camera.reset(game);
   if(face!=0)camera.orbit(face*8.F,0);
+  camera.setSurveillance(surveillance,game);
   relay::RenderOptions options; options.overview=overview; options.normalMapping=normal;options.normalStrength=normalStrength;options.normalCompare=compare;options.diagnostics=diagnostics;
   enum class Screen {Title,Play,Pause,Settings}; Screen screen=paused?Screen::Pause:play?Screen::Play:Screen::Title;
   bool settingsPause=false,captured=false; double mx=0,my=0,last=glfwGetTime();
@@ -96,6 +98,9 @@ int main(int argc,char** argv) {
     if(screen==Screen::Play) screen=Screen::Pause; else if(screen==Screen::Pause) screen=Screen::Play;
    }
    if(focused&&screen==Screen::Play) {
+    // A toggle needs the queued key-down event, even if a quick tap has already
+    // been released before the next native held-key sample. Repeats stay off.
+    if(ImGui::IsKeyPressed(ImGuiKey_V,false))camera.setSurveillance(!camera.surveillance(),game);
     if(keys.pressed(GLFW_KEY_F1))options.diagnostics=!options.diagnostics;
     if(keys.pressed(GLFW_KEY_F2)){options.normalMapping=!options.normalMapping;options.normalCompare=false;}
     if(keys.pressed(GLFW_KEY_F3))options.normalCompare=!options.normalCompare;
@@ -105,7 +110,7 @@ int main(int argc,char** argv) {
    }
    const auto& bindings=relay::keyBindings();
    const bool control=screen==Screen::Play&&focused;
-   const bool wantsCapture=control&&game.state()==relay::RunState::Playing&&frames==0;
+   const bool wantsCapture=control&&game.state()==relay::RunState::Playing&&!camera.surveillance()&&frames==0;
    if(wantsCapture!=captured) {
     captured=wantsCapture; glfwSetInputMode(native,GLFW_CURSOR,captured?GLFW_CURSOR_DISABLED:GLFW_CURSOR_NORMAL);
     if(glfwRawMouseMotionSupported()) glfwSetInputMode(native,GLFW_RAW_MOUSE_MOTION,captured?GLFW_TRUE:GLFW_FALSE);
@@ -135,10 +140,11 @@ int main(int argc,char** argv) {
    if(game.outOfLives()&&game.player().deathTime>=relay::Game::respawnDelay) beginChange(Change::Restart,level);
    const bool holding=change.t>=0&&change.t<change.cardEnd;
    if(screen==Screen::Play&&!frozen&&!holding&&(focused||frames>0)) {
-    input.facingYaw=camera.yaw();
+    if(!camera.surveillance())input.facingYaw=camera.yaw();
     game.update(dt,input);
    }
    if(!frozen)camera.update(game,dt);
+   options.overview=overview||camera.surveillance();
    options.menu=screen==Screen::Title||(screen==Screen::Settings&&!settingsPause);
    if(options.menu) {
     renderer.drawMenuBackground(w,h,float(now));

@@ -9,6 +9,9 @@ _deps/
 
 # Local-only standalone map editor (not part of the game submission).
 /src/editor/
+CoreExplorerLiteEditor.exe
+/OpenLiteEditor.cmd
+/.editor-backups/
 RelayEditor.exe
 /voxel_relay_keys.ini
 /assets/sounds/local-apex/

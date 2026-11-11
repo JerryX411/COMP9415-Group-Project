@@ -53,7 +53,7 @@ void AppUi::beginFrame() {
 }
 void AppUi::render() { ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData()); }
 
-bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions&,const relay::Renderer& renderer,bool) {
+bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions& options,const relay::Renderer& renderer,bool) {
  using namespace relay; using namespace relay::palette;
  auto* d=ImGui::GetBackgroundDrawList(); const auto size=ImGui::GetIO().DisplaySize;
  const float s=std::min(size.x/1440.F,size.y/900.F);
@@ -154,12 +154,20 @@ bool AppUi::draw(const BenchmarkSnapshot&,relay::Game& game,relay::RenderOptions
  if(game.state()==RunState::Playing&&!words) {
   // The exit: a door glyph that always marks the gate, pinned to the screen edge (with a
   // chevron pointing on) while the gate is off screen. Amber while sealed, mint once open.
-  const auto at=renderer.projectToEdge(game.gatePosition()+glm::vec3(0,3.4F,0),size.x,size.y,54*s,190*s);
-  const auto map = drawYardMinimap(*d,game,size,s);
+  const auto at=renderer.projectToEdge(game.gatePosition()+glm::vec3(0,3.4F,0),size.x,size.y,54*s,(options.overview?130:190)*s);
+  const bool mapOverlap=!options.overview&&drawYardMinimap(*d,game,size,s).overlaps({at.x,at.y},44*s);
+  if(options.overview) {
+   // A constant-pixel locator remains legible even beneath an upper floor.
+   const auto q=renderer.projectToEdge(player.position+glm::vec3(0,.9F,0),size.x,size.y,12*s,120*s);
+   const ImVec2 p(q.x,q.y);
+   d->AddCircle(p,10*s,IM_COL32(3,12,20,230),32,5*s);
+   d->AddCircle(p,10*s,glowCyan,32,2*s);
+   d->AddCircleFilled(p,2.5F*s,main,12);
+  }
   // The minimap has its own exit direction cue when this glyph would cover it.
-  if(!map.overlaps({at.x,at.y},44*s)) {
+  if(!mapOverlap) {
    const bool open=game.gateUnlocked();const ImU32 c=open?mint:amber;
-   const ImVec2 p(at.x,at.y);const float r=24*s,pulse=open?.75F+.25F*std::sin(t*4):1.F;
+   const ImVec2 p(at.x,at.y);const float r=(options.overview?14:24)*s,pulse=open?.75F+.25F*std::sin(t*4):1.F;
    d->AddCircleFilled(p,r,withAlpha(slate,.62F),40);
    d->AddCircle(p,r,withAlpha(c,.9F*pulse),40,2*s);
    const float w=r*.62F,top=p.y-r*.55F,bottom=p.y+r*.55F;
@@ -224,6 +232,7 @@ void AppUi::drawDiagnostics(const relay::Game& game,const relay::RenderOptions& 
  const auto text=[&](float x,float y,const std::string& value){relay::drawTracked(d,22*s,{x*s,y*s},relay::palette::ice,value.c_str(),0);};
  if(options.normalCompare){text(size.x/s*.25F-95,100,"NORMAL MAP OFF");text(size.x/s*.75F-95,100,"NORMAL MAP ON");}
  if(frozen)text(size.x/s*.5F-110,220,"FROZEN  /  F4 RESUME");
+ if(camera.surveillance())text(size.x/s*.5F-90,34,"GLOBAL CAM  /  V");
  if(!options.diagnostics)return;
  const auto stats=renderer.stats();const auto eye=camera.eye();char value[180];float y=260;
  const auto row=[&](const std::string& v){text(40,y,v);y+=30;};

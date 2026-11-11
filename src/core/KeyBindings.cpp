@@ -15,7 +15,7 @@ std::array<int, KeyBindings::count> KeyBindings::defaults() {
 }
 
 bool KeyBindings::reserved(int key) {
-  return key == GLFW_KEY_ESCAPE || key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER || key == GLFW_KEY_F1 ||
+  return key == GLFW_KEY_ESCAPE || key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER || key == GLFW_KEY_V || key == GLFW_KEY_F1 ||
          key == GLFW_KEY_F2 || key == GLFW_KEY_F3 || (key >= GLFW_KEY_F4 && key <= GLFW_KEY_F6) || key == GLFW_KEY_1 || key == GLFW_KEY_2;
 }
 

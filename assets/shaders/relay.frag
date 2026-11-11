@@ -95,6 +95,18 @@ void main() {
     n=normalize(mat3(t,b,n)*normalize(detail));
   }
   vec3 albedo=vColour*texture(uAlbedo,materialUv).rgb;
+  // Jump-pad surface: two circles and a centre dot, printed on the top face.
+  // UV derivatives antialias the marks at any camera distance; they retain the
+  // painted surface's normal detail and scene lighting rather than washing out.
+  float launchMark=0.0;
+  if(vSurface>5.95&&vSurface<6.05&&vNormal.y>.5) {
+    float radius=length(vUv-vec2(.5)),aa=max(fwidth(radius),.001);
+    float outer=1.0-smoothstep(.018-aa,.018+aa,abs(radius-.37));
+    float inner=1.0-smoothstep(.016-aa,.016+aa,abs(radius-.20));
+    float centre=1.0-smoothstep(.047-aa,.047+aa,radius);
+    launchMark=max(max(outer,inner),centre);
+    albedo=mix(albedo,vec3(.34,.92,.80),launchMark);
+  }
   float diffuse=max(dot(n,light),0.0);
   float specular=pow(max(dot(n,normalize(light+view)),0.0),gloss);
   float sky=.5+.5*n.y;
@@ -102,6 +114,7 @@ void main() {
   // Required ambient + Lambert diffuse + Blinn-Phong specular, in world space.
   vec3 colour=albedo*(ambient+vec3(1.0,.90,.78)*.85*diffuse)
              +vec3(1,.94,.86)*specular*reflectance+albedo*(vMaterial.y+selfGlow);
+  colour+=launchMark*vec3(.20,.72,.62)*(.18+vMaterial.y*.35);
   colour=mix(colour,uFogColour,fog);
   fragColour=vec4(colour,vAlpha);
 }

@@ -81,6 +81,7 @@ bool drawSettings(KeyBindings& keys,float,int pressedKey,bool escape,bool){
  float x=size.x*.5F-400*s,top=50*s;
  center(d,top,48*s,ink,"Controls");
  center(d,top+60*s,25*s,muted,"Select an action to change its key");
+ center(d,top+(108+(KeyBindings::count+2)*58)*s,22*s,muted,"V  SWITCH CAMERA: FOLLOW / GLOBAL");
  bool consumed=capture>=0;
  if(capture>=0){if(escape)capture=-1;else if(pressedKey>=0&&keys.assign(KeyAction(capture),pressedKey)){keys.save(settingsPath());capture=-1;}}
  else navigation(setting,KeyBindings::count+2);
