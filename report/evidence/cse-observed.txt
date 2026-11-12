@@ -1,0 +1,20 @@
+Observed through TigerVNC on CSE vx20, 2026-11-13.
+Source code revision: 1348b07. This is an observation transcript.
+CMake 3.31.6; GNU Make 4.4.1; g++ (Debian 14.2.0-19) 14.2.0.
+
+1/6 gameplay                 Passed 0.26 sec
+2/6 tutorial_showcase        Passed 0.02 sec
+3/6 corona_run               Passed 0.11 sec
+4/6 surveillance_camera      Passed 0.01 sec
+5/6 helios_four_core_route   Passed 0.16 sec
+6/6 gate_hierarchy           Passed 0.02 sec
+100% tests passed, 0 tests failed out of 6.
+Total test time (real) = 0.59 sec.
+
+Three level capture checks (0, 1, 2): health=5, normal=1, gl_error=0.
+Live gate animation capture (level 0): health=5, normal=1, gl_error=0.
+CSE build, tests and OpenGL smoke checks passed.
+
+Then launched ./build-cse/CoreExplorer interactively. Observed Core Explorer
+window/title, tutorial entry, retained crouch after a short C tap, whole-map
+camera after V, and the Paused menu after Esc. Window fits remote desktop.

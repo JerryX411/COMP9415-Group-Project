@@ -1,6 +1,6 @@
 # Simplified coursework background
 
-The lite version draws a procedural star sky (`assets/shaders/sky.vert` / `sky.frag`, since 2026-11-08) behind the game and on the title screen. There is no image: one fullscreen triangle per frame works out each pixel's view direction from the inverse view-projection matrix. It draws:
+The game draws a procedural star sky (`assets/shaders/sky.vert` / `sky.frag`, since 2026-11-08) behind the game and on the title screen. There is no image: one fullscreen triangle per frame works out each pixel's view direction from the inverse view-projection matrix. It draws:
 - a deep navy gradient that is a little bluer toward the horizon;
 - a tilted band of milky light with violet and teal haze, plus a few faint nebula patches elsewhere;
 - three layers of stars (many small, some medium, a few bright) in white, cool blue and warm tints, twinkling slowly. They are denser inside the band.

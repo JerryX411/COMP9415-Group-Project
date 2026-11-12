@@ -1,37 +1,17 @@
-Test project E:/CodexWorkspace/.cache/temp/lite-fixed-camera-build-20261110
-    Start 1: lite_editor_workflow
-1/6 Test #1: lite_editor_workflow .............***Failed    0.18 sec
-LiteEditor: Editor test: Corona maps to corona_run.txt
+Test project E:/CodexWorkspace/Projects/Core-Explorer-Lite/build
+    Start 1: gameplay
+1/6 Test #1: gameplay .........................   Passed    0.72 sec
+    Start 2: tutorial_showcase
+2/6 Test #2: tutorial_showcase ................   Passed    0.25 sec
+    Start 3: corona_run
+3/6 Test #3: corona_run .......................   Passed    0.40 sec
+    Start 4: surveillance_camera
+4/6 Test #4: surveillance_camera ..............   Passed    0.25 sec
+    Start 5: helios_four_core_route
+5/6 Test #5: helios_four_core_route ...........   Passed    0.38 sec
+    Start 6: gate_hierarchy
+6/6 Test #6: gate_hierarchy ...................   Passed    0.19 sec
 
-    Start 2: lite_gameplay
-2/6 Test #2: lite_gameplay ....................***Failed    0.70 sec
-Helios Yard: four retained districts and their mechanisms
+100% tests passed out of 6
 
-    Start 3: tutorial_showcase
-3/6 Test #3: tutorial_showcase ................   Passed    0.42 sec
-    Start 4: corona_run
-4/6 Test #4: corona_run .......................***Failed    0.40 sec
-FAIL corona: Corona Run pieces
-
-    Start 5: surveillance_camera
-5/6 Test #5: surveillance_camera ..............   Passed    0.41 sec
-    Start 6: helios_four_core_route
-6/6 Test #6: helios_four_core_route ...........***Failed    0.44 sec
-Core 0 at 70.5,2.8,49.5
-Core 1 at 71.5,2.8,26.5
-Core 2 at 18.5,4.8,45.5
-Core 3 at 19.5,5.8,15.5
-No path: visited=9533 bounds=5,1,5..83,5,63 closest=83,1,33
-FAIL helios: West inner plate inaccessible
-
-
-33% tests passed, 4 tests failed out of 6
-
-Total Test time (real) =   3.79 sec
-
-The following tests FAILED:
-	  1 - lite_editor_workflow (Failed)
-	  2 - lite_gameplay (Failed)
-	  4 - corona_run (Failed)
-	  6 - helios_four_core_route (Failed)
-Errors while running CTest
+Total Test time (real) =   2.24 sec

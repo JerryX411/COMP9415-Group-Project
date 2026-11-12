@@ -1,6 +1,6 @@
-# Lite graphics demonstrations
+#  graphics demonstrations
 
-The two selected challenges are **Normal Mapping** and **Particles**. Hierarchical models are outside this update. These notes describe code and reproduction, not a claim of marks or a final Report.pdf.
+The two selected challenges are **Normal Mapping** and **Particles**. The robot and animated exit gate supply the separate core hierarchical-model requirement. These notes describe code and reproduction; `Report.pdf` contains the current evaluation.
 
 ## Interactive checks
 
@@ -24,16 +24,16 @@ Fragments use opaque shaded geometry. Sparks use velocity-aligned streaks; launc
 
 ## Reproducible captures
 
-Run from the directory containing the executable and assets. On Linux replace CoreExplorerLite.exe with ./CoreExplorerLite.
+Run from the directory containing the executable and assets. On Linux replace CoreExplorer.exe with ./CoreExplorer.
 
 ```
-CoreExplorerLite.exe --play --freeze --frames 2 --normal-off --capture off.png
-CoreExplorerLite.exe --play --freeze --frames 2 --capture on.png
-CoreExplorerLite.exe --play --freeze --frames 2 --normal-strength 0 --capture zero.png
-CoreExplorerLite.exe --play --freeze --frames 2 --compare-normals --diagnostics --capture split.png
-CoreExplorerLite.exe --effect core --frames 2 --diagnostics --capture core.png
-CoreExplorerLite.exe --effect impact --frames 2 --diagnostics --capture impact.png
-CoreExplorerLite.exe --effect pad --frames 2 --diagnostics --capture pad.png
+CoreExplorer.exe --play --freeze --frames 2 --normal-off --capture off.png
+CoreExplorer.exe --play --freeze --frames 2 --capture on.png
+CoreExplorer.exe --play --freeze --frames 2 --normal-strength 0 --capture zero.png
+CoreExplorer.exe --play --freeze --frames 2 --compare-normals --diagnostics --capture split.png
+CoreExplorer.exe --effect core --frames 2 --diagnostics --capture core.png
+CoreExplorer.exe --effect impact --frames 2 --diagnostics --capture impact.png
+CoreExplorer.exe --effect pad --frames 2 --diagnostics --capture pad.png
 ```
 
 `--effect` prepares a deterministic gameplay event and freezes the result. To watch it settle interactively, omit --frames and press F4. These are demonstration entry points, not new game rules. Automated gameplay tests also check overlap, lifetime cleanup, cooldown, restart and repeated jump-pad triggers.
@@ -41,25 +41,25 @@ CoreExplorerLite.exe --effect pad --frames 2 --diagnostics --capture pad.png
 ## Core optimisation benchmark
 
 ```
-CoreExplorerLite.exe --benchmark --level 0 --benchmark-output level0.csv
-CoreExplorerLite.exe --benchmark --level 1 --benchmark-output level1.csv
+CoreExplorer.exe --benchmark --level 0 --benchmark-output level0.csv
+CoreExplorer.exe --benchmark --level 1 --benchmark-output level1.csv
+CoreExplorer.exe --benchmark --level 2 --benchmark-output level2.csv
 ```
 
-Build Release before measuring. The tool requires and verifies a 1920x1080 framebuffer, disables VSync, freezes each level after 24 simulation steps of 1/120 seconds on its jump pad (including its active particles), fixes eye=(20,17,38), target=(20,1,19), vertical FOV=50 degrees, near=0.1, far=300, normal mapping ON at strength 1, static dark-blue background (no skybox). Only hidden-face removal differs between baseline and optimised. Both modes keep the same instancing; it is not claimed as an extra challenge.
+Build Release before measuring. The tool requires and verifies a 1920x1080 framebuffer, disables VSync, freezes each level after 24 simulation steps of 1/120 seconds on its jump pad (including its active particles), fixes eye=(20,17,38), target=(20,1,19), vertical FOV=50 degrees, near=0.1, far=300, normal mapping ON at strength 1, procedural star background at a fixed render time of zero. Only hidden-face removal differs between baseline and optimised. Both modes keep the same instancing; it is not claimed as an extra challenge.
 
 Each row has 60 unmeasured warm-up scene frames and exactly 240 measured frames. Three trials alternate order. CPU wall time brackets the complete scene draw with glFinish synchronization. Loading, mesh construction, static instance upload, gameplay, UI, screenshots and buffer swapping are excluded. All scene geometry and frozen particle draws are included. This measures synchronized scene-render time, not gameplay FPS, CPU update cost or a pure GPU timer query.
 
 CSV rows contain mean ms/frame, submitted triangles, draw calls, solid voxels, exposed faces and live particles. The header records GPU/driver and frozen conditions. Two PNGs next to the CSV capture the first baseline and optimised result for image comparison. Resizing/cancelling produces an error; do not use incomplete CSVs. Output parent directories must exist. Run on the intended assessment hardware too; local Windows numbers are not VLAB validation.
 
-## Local measurement record (2026-11-08, before the five-material art pass)
+## Current local measurement record (2026-11-13)
 
-These retained measurements precede the five-material update and must be rerun for final submission. Windows x64 Release on NVIDIA RTX 4060 Laptop GPU, driver 621.01. Raw rows: `benchmarks/windows-20261108-level0.csv` and `benchmarks/windows-20261108-level1.csv`.
+Windows x64 Release, GCC 16.2, NVIDIA RTX 4060 Laptop GPU, driver 621.01. Current raw data, paired images, source fingerprints and test output are retained in `report/evidence/`. Each mean below averages three 240-frame runs, with all raw rows retained.
 
-| Scene | Baseline mean of 3 trials (ms) | Optimised mean (ms) | Submitted triangles, before / after | Draw calls |
+| Scene | Baseline ms | Optimised ms | Reduction | Triangles, before / after |
 |---|---:|---:|---:|---:|
-| Tutorial | 0.367551 | 0.180600 | 68001 / 55037 | 8 / 8 |
-| Obstacle | 0.363275 | 0.189072 | 69437 / 56389 | 8 / 8 |
+| Tutorial | 2.806 | 2.605 | 7.2% | 93745 / 78109 |
+| Helios | 3.426 | 2.801 | 18.3% | 378425 / 221033 |
+| Corona | 3.355 | 2.664 | 20.6% | 322725 / 171881 |
 
-The Obstacle Yard row is a historical measurement: that level was removed on 2026-11-09, and `--benchmark --level 1` now measures Helios Yard.
-
-The first baseline trial is slower than later ones: retain all raw values rather than selecting the fastest. These figures describe this frozen scene on this machine, not a general FPS promise. The captured baseline/optimised images are not bit-identical: mean absolute per-channel differences are below 0.009 on a 0..255 scale. Inspect the captures alongside timing results; do not claim exact pixel equivalence. Normal strength zero versus OFF was separately verified pixel-identical. Full-resolution captures and verification.json are in the local Challenge-Checks-20261108 output folder.
+These are synchronized fixed-scene render times, not gameplay FPS or cross-device guarantees. Paired screenshots are nearly but not exactly identical; numerical image differences are in `summary.json`. Older `benchmarks/windows-20261108-*` files describe historical scenes and are not current results.

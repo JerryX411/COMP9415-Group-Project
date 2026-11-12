@@ -1,52 +1,51 @@
-Core Explorer Lite report evidence - 12 November 2026
+Core Explorer verification - 13 November 2026
 
-Authoritative source: E:\CodexWorkspace\Projects\Core-Explorer-Lite
-Revision: 1af555e plus the pre-existing local source/level changes.
-source-sha256.txt records the implementation, tests and assets used for this report.
-The report task did not modify game code, map files or test expectations.
+Source: this repository, based on Member-B 4ca727b.
+Implementation revision: 1348b07 (hierarchical gate, input fixes, window fit, naming).
+This report refresh changes documentation and evidence only after that revision.
 
-Build: E:\CodexWorkspace\.cache\temp\lite-fixed-camera-build-20261110
-Configuration: Release, MinGW Makefiles, GCC 16.2.0.
-Built targets: Craft (output CoreExplorerLite.exe), lite_tests, showcase_tests,
-corona_tests, surveillance_tests, helios_tests. All target builds completed.
-The editor executable was not rebuilt by the report task.
+Windows: fresh Release CMake configure fetched pinned upstream dependencies;
+no vendor directory, local dependency overrides or editor was required.
+GCC 16.2.0 / MinGW Makefiles. All six game CTest suites passed (ctest.txt).
+The source-only archive was also built in a separate clean directory.
+The final executable is CoreExplorer.exe, with its runtime assets beside it.
 
-CTest: 2 of 6 registered suites passed. See ctest.txt.
-Passed: tutorial_showcase, surveillance_camera.
-Failed: lite_editor_workflow, lite_gameplay, corona_run, helios_four_core_route.
-Current Corona map contains 9 cores, 6 movers, 4 checkpoints, 4 jump pads;
-the Corona structure test expects 10 cores and at least 8 movers.
-Current Helios map contains 5 doors and 5 plates; structural tests expect 6.
-The Helios bot also fails at the indexed west inner plate. This does not alone
-prove human traversal is impossible; the route and its object-index assumptions
-must be reconciled with the current map, then checked end-to-end.
-Do not describe the current snapshot as passing the full regression suite.
-VLAB/CSE build and full mission play-through have not been verified here.
+CSE: actual TigerVNC session on vx20, CMake 3.31.6, GNU Make 4.4.1,
+GCC 14.2. Source cloned from the test branch into ~/core-explorer-check-20261113.
+Ran bash tools/validate-cse.sh. All six suites passed; final run 0.59 seconds.
+Tutorial, Helios, Corona and live gate render checks each reported gl_error=0.
+Full remote raw logs remain in cse-renamed.log in that checkout.
+cse-observed.txt is a transcription of the observed result, not an exported log.
+Interactive checks: title/menu entry, C crouch toggle, V whole-map view and Esc pause.
+Quick taps originally failed in VNC; GLFW press events now preserve them between
+frames. The initial window also fits the smaller desktop. Automated routes cover
+mission completion; this is not a claim of an exhaustive human play-through.
 
-Benchmarks: tutorial.csv, helios.csv, corona.csv.
-Each has three repeats per mode, each with 60 warm-up and 240 measured frames.
-The GPU/driver, resolution, camera, state and counts are recorded in each CSV.
-Summary statistics and image-difference metrics are in summary.json.
-Timing includes scene draw and glFinish completion; excludes prepare/UI/swap.
-The map editor remained open on the same desktop throughout these measurements.
-Results are local fixed-view measurements, not total gameplay frame times.
-The first baseline/optimized image pair is retained beside each CSV.
+Game tests: gameplay, tutorial_showcase, corona_run, surveillance_camera,
+helios_four_core_route, gate_hierarchy. The three routes use movement/jump/interact
+inputs, without direct inventory injection. Gate isolation tests additionally use
+controlled player placement to check the animated collision aperture.
 
-Visual evidence was captured directly by CoreExplorerLite.exe from the source
-root using --capture. Event log observations: core=20 particles, impact=24
-particles and health=4, pad=35 particles, run=15 particles; no GL error reported.
-Interactive --freeze stops simulation but not wall-clock-driven sky/UI effects.
-normal-zero.png and normal-off.png are therefore not exactly equal as whole
-images; the report does not claim that they are. The zero-strength shader branch
-itself retains the geometric normal.
+Benchmarks: tutorial.csv, helios.csv, corona.csv. Windows RTX 4060 Laptop GPU,
+driver 621.01; 1920x1080, 60 warm-up + 240 measured frames, 3 trials per mode.
+The render geometry/state matches the final version; later input/window/naming
+changes do not alter the frozen rendering path. Source fingerprints accompany
+this record. Timing excludes preparation, gameplay, UI and buffer swapping.
+Other desktop applications were open; these are local measurements, not a
+cross-device performance guarantee. Full conditions are recorded in each CSV.
+Paired image difference statistics are in summary.json.
 
-Writing: Member A/B role descriptions follow ProjectPlan.pdf as requested.
-Real-name aliases follow the plan; no student IDs have been invented.
-Technical reflection paragraphs are a draft for the two members to review.
-The report states the implementation's changes from the original plan.
+Windows event captures: core=20 live particles, impact=24 and health=4,
+pad=35, run=15. All capture commands reported gl_error=0.
+Gate closed/opening/open captures were checked for panel and handle animation.
+Normal comparisons are visual evidence; wall-clock sky/UI prevents claiming
+whole-image identity between separately launched interactive captures.
 
-Rebuild PDF with TeX Live from report/:
-pdflatex -interaction=nonstopmode -halt-on-error -jobname=Report -output-directory=E:/CodexWorkspace/.cache/temp/lite-report-build main.tex
-Run twice when references or layout change, then review the rendered six pages.
-Final delivery is the repository-root Report.pdf; editable source is main.tex.
-reproduce.ps1 reruns benchmarks/captures into a separate E-drive temp folder.
+The final Report.pdf is six A4 pages, generated from report/main.tex.
+Both named contribution/reflection paragraphs retain the project's plan-based
+draft framing; no new personal experiences or student IDs were invented.
+ProjectPlan.pdf is the previously submitted plan and remains unchanged.
+
+Reproduce: tools/reproduce-benchmark.sh (Linux), report/evidence/reproduce.ps1
+(Windows). Build the PDF by running pdflatex twice from report/.
+Formal final submission still requires the allocated course GitLab main branch.

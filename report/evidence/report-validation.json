@@ -1,21 +1,14 @@
 {
   "pages": 6,
   "paper": "A4",
-  "format": "Formal academic paper; two columns; Times-style serif text; abstract, keywords, numbered sections/equation/figures/tables, numeric citations and references",
-  "native_compiler": "pdfTeX / TeX Live 2026",
-  "desktop_compiler": "success",
-  "visual_review": "Changed pages 1 and 5 visually reviewed; pages 2, 3, 4 and 6 are pixel-identical to previously reviewed renders.",
+  "compiler": "pdfTeX / TeX Live 2026",
   "overfull_boxes": 0,
-  "pdf_sha256": "252c8d302d140c235ab529c5d4441c5db513192065310139b39204242211fe76",
-  "source_sha256": "63fddd440a237be34ac9a1c65feed3eda293deb7087843804c378d2cc42a8257",
-  "size_bytes": 10872372,
-  "role_identification": {
-    "Member A": "Jacky Hui",
-    "Member B": "Jerry Xie"
-  },
-  "layout_note": "No clipping, overlap, overfull boxes or unresolved references. Compiler warns that balance was invoked in the second column; the last page is visually unchanged.",
-  "output_pdf": "E:\\CodexWorkspace\\Projects\\Core-Explorer-Lite\\Report.updated.pdf",
-  "title_block": "Paper title and authors with Member A/B labels; course, institution/term, and date removed.",
+  "unresolved_references": 0,
+  "visual_review": "All six pages reviewed; figures, captions, table values, hierarchy and bibliography checked.",
+  "pdf_sha256": "ca8f4a3cecb6276a3fbd04fc62c2cb1bae08dc6b76130ffecaa67421cafa9bf9",
+  "source_sha256": "b263804693ced54c19e64477d5868aa5883612954ea3130fd4f4c74cc721b09c",
+  "size_bytes": 13340446,
+  "output_pdf": "Report.pdf",
   "project_name": "Core Explorer",
-  "project_name_check": "No Lite labels in LaTeX source, PDF text or PDF metadata."
+  "name_check": "No Lite labels in report text or metadata."
 }

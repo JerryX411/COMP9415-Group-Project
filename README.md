@@ -1,19 +1,31 @@
-# Core Explorer Lite
+# Core Explorer
 
-## Download and play (Windows x64)
+This is the coursework edition of **Core Explorer**. The executable is named `CoreExplorer` (`CoreExplorer.exe` on Windows). The separate advanced project remains independently maintained.
 
-Download **Core-Explorer-Lite-Windows-x64.zip** from [GitHub Releases](https://github.com/JerryX411/COMP9415-Group-Project/releases/tag/lite-2026-11-07). Extract the whole ZIP, then double-click **Play.cmd**. No compiler, CMake, Python or build step is required. Keep the assets folder beside the executable. Requires 64-bit Windows and an OpenGL 3.3-capable graphics driver. GitHub's Code > Download ZIP is source code, not this ready-to-play package.
-
-
-The linked release is the November 7 snapshot; newer local graphics demonstrations require rebuilding this source.
-
-Current merged Lite version (Member-B): the reduced edition of Core Explorer. The advanced version is preserved in Git history (48f981d) and the separate Core-Explorer repository.
+GitHub's Code > Download ZIP contains source. Follow the build instructions below; after compiling once, launch the executable directly. Do not use an older release binary to demonstrate this source revision.
 
 Includes three levels: a compact tutorial showcase, Helios Yard and Corona Run (see below; the old Obstacle Yard was removed on 2026-11-09), plus robot movement/animation, WASD, Left Shift sprint, mouse camera, Space jump, C toggle crouch, E switch interaction, electric floor plates, moving blocks, armour, restart/pause, and a plain UI over a procedural star sky (see [docs/SKYBOX.md](docs/SKYBOX.md)). E disables the linked floor plate for five seconds. R restarts; Esc pauses. The title menu lists, top to bottom and centred: Tutorial, Level 1 (Helios Yard), Level 2 (Corona Run), Settings and Quit. Picking a level starts it; level title cards use the same numbering (TUTORIAL, LEVEL 1, LEVEL 2).
 
 Removed: arrival cinematic, boost/slide/wall actions, jetpack, advanced pickup effects, training, workshop, advanced particle effects, and the full audio pack. Corona Run includes its own checkpoint beacons and fall recovery. The reduced build is intentionally silent.
 
-Build: `cmake -S . -B build`, then `cmake --build build`. Run `build/CoreExplorerLite.exe` (Windows) or `build/CoreExplorerLite` (Linux). Tests: `ctest --test-dir build --output-on-failure`.
+## Build the current source
+
+Prerequisites: CMake 3.18+, Git, a C++17 compiler, Make (or Visual Studio on Windows), Python 3 with Jinja2 for GLAD. Linux also needs OpenGL and X11 development headers (Debian packages: `libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev`). The first configure downloads pinned upstream dependencies; subsequent builds are incremental.
+
+On Windows, install these tools on PATH, then double-click **BuildAndRun.cmd**. `BuildAndRun.cmd --build-only` builds and runs the six tests without opening the game. After building, **Play.cmd** opens the existing executable without compiling. Use **BuildAndRun.cmd** again after code changes.
+
+On Linux/CSE, from the repository root:
+
+```sh
+cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+cmake --build build --parallel 4
+ctest --test-dir build --output-on-failure
+./build/CoreExplorer
+```
+
+`bash tools/validate-cse.sh` performs a clean CMake/Make build, all six test suites, three level render checks and a live gate-opening render check. It needs a graphical OpenGL 3.3 session. The standalone editor is excluded by default and is not in the submitted source. The local authoring copy can opt in with `-DBUILD_MAP_EDITOR=ON`.
+
+The source tree excludes downloaded `vendor/`, `toolchain/`, build caches and the obsolete `Playable/` executable package, as required by the assignment. Existing ignored local copies are retained on disk.
 
 The pause menu darkens the game behind it and shows only "Paused" and a centred column of four options, without the subtitle or key hint (`--pause` opens on it for captures). Title, pause, settings and result screens use large bold text without panels, borders or button fills; only the pause menu adds a fullscreen dimming layer. Selected menu text is cyan; the gameplay HUD mirrors the advanced layout: five slanted armour cells at top left, filled/dim hexagonal core slots at bottom centre, and large countdown digits (or an infinity glyph in training) at top right, all without backing panels or outlines. A small glyph shadow preserves readability.
 
@@ -21,11 +33,11 @@ UI uses Segoe UI Bold from Windows when available, or the bundled Rajdhani font 
 
 ## Tutorial showcase
 
-Choose **Tutorial Yard** (level 0) to demonstrate all current Lite mechanics in one 32 by 32 open yard. Its authored map is `assets/levels/tutorial_showcase.txt`. The timer is unlimited; gameplay has no teaching text, interaction prompts or control legend. Armour, core slots, the infinity symbol, exit marker and the teammate's minimap remain. Menus, result screens and optional F1-F6 graphics diagnostics still work.
+Choose **Tutorial Yard** (level 0) to demonstrate all current mechanics in one 32 by 32 open yard. Its authored map is `assets/levels/tutorial_showcase.txt`. The timer is unlimited; gameplay has no teaching text, interaction prompts or control legend. Armour, core slots, the infinity symbol, exit marker and the teammate's minimap remain. Menus, result screens and optional F1-F6 graphics diagnostics still work.
 
 From the south entrance, the central aisle is clear for walking, strafing, sprinting and jumping. The low block and one-cell crawl tunnel are on the left; the electric floor, its E-operated relay and an independent moving block track are on the right. The north-west alcove demonstrates a permanent ground-plate door. The north-east platform combines a jump pad, ordinary-jump stairs, an upper-floor plate and door. Two nearby portal endpoints can be activated separately and then traversed in either direction. Three cores (centre, ground alcove, upper platform) unlock the north exit. Every station is accessible without completing a long puzzle chain; R resets the entire display.
 
-Ceramic, tread, rubber, alloy and painted surfaces are visible throughout the yard, including the small material row near the entrance. Running, jumping, landing, launch, damage, pickup and portal feedback use the existing particle effects. `tutorial_showcase` in CTest walks a complete collection/door/portal/jump-pad/upper-door/exit route without warping, then checks restart and the normal-jump staircase. `lite_gameplay` also checks the crawl passage, switch, hazards and feedback in this layout.
+Ceramic, tread, rubber, alloy and painted surfaces are visible throughout the yard, including the small material row near the entrance. Running, jumping, landing, launch, damage, pickup and portal feedback use the existing particle effects. `tutorial_showcase` in CTest walks a complete collection/door/portal/jump-pad/upper-door/exit route without warping, then checks restart and the normal-jump staircase. `gameplay` also checks the crawl passage, switch, hazards and feedback in this layout.
 
 ## Lives
 
@@ -33,7 +45,7 @@ Each timed level gives **three lives**. The tutorial has unlimited retries. Losi
 
 The HUD shows lives as three little robot heads under the armour cells, in glowing cyan while alive and faded once spent; the one just lost flashes red. The tutorial yard never runs out of lives: one head and an infinity sign. Captures: `--effect reboot` freezes a reboot in progress.
 
-## Corona Run (level 3, the second mission, in development)
+## Corona Run (level 2, the second mission)
 
 **Corona Run** comes after Helios Yard: choose **Level 2** on the title screen (or `--level 2`), or press Enter after winning Helios. Helios is an open yard to explore and puzzle through. Corona Run is a long timed parkour path built for challenge (rebuilt and extended on 2026-11-09). Nine main strands wind round a 76 × 76 room twice, climbing from stand height 4 to 12 and back down. Three side branches hold four of the cores. Collect all nine cores to unlock the exit within the 5:00 limit. Corona Run is the last level: after the win, the result screen offers only **ENTER MAIN MENU**, which fades back to the title screen (R does nothing there).
 
@@ -77,9 +89,9 @@ In CTest, `corona_run` checks the pieces: 9 cores, 7 checkpoints, 15 shock traps
 
 A bot then finishes the whole run, every branch included, using only key presses. It sprints across gaps, delays its jump under the low beam, crouches under bars, times the hazards and rides the jump pads. It finishes in about 123 simulated seconds with no falls or damage.
 
-## Helios Yard (four-region Lite layout)
+## Helios Yard (four-region layout)
 
-Choose **Level 1** on the title screen (or `--level 1`). Enter after a win moves through Tutorial Yard → Helios Yard → Corona Run. Its authored map is `assets/levels/helios_yard.txt`, in `LevelData` format. This Lite layout is maintained separately from the full edition: do not replace it with the full edition's map.
+Choose **Level 1** on the title screen (or `--level 1`). Enter after a win moves through Tutorial Yard → Helios Yard → Corona Run. Its authored map is `assets/levels/helios_yard.txt`, in `LevelData` format. This layout is maintained separately from the full edition: do not replace it with the full edition's map.
 
 The yard now contains **four regions and four cores**: the northwest roof, northeast shock floor, southwest layered maze and southeast corridor maze. The middle west maze, middle east stepping-stone trial and central core tower were removed. Removing 24 rows reduces the room from 84 × 84 to **84 × 60**, with a cross-passage and raised stepping stones leading to the northwest core. Four blast doors and four ground-level pressure plates remain. One plate opens a raised door, and the two east-district plates sit on the approach side of their doors. The portal pair, jump pad, hazards and final exit remain. All four cores unlock the final exit; the countdown remains 10:00.
 
@@ -100,11 +112,11 @@ Only what this map needs came across from the full edition:
 
 **Brighter sparks.** Every spark and light streak is drawn as a wider coloured streak with a white-hot core, a longer trail and a bigger, brighter halo. Debris chips are larger and glow hot as they fly. The emitters keep their particle counts but make bigger particles: impact sparks are hotter orange with pale-yellow ones mixed in. A hit also flashes warm light at the chest for a moment. The shock-plate arcs, their landing flashes and the warning embers are brighter too, and the ground dust is a little denser.
 
-Nothing else was synced: no checkpoints, pickups, crimson tiles, slides, wall actions, training, sounds, shadows or bloom. `lite_tests` also covers Helios Yard: the map's pieces and materials, a clear spawn, permanent unlocks for ground-level and raised doors, portal linking and crossing, restart, shock damage and sprint. Captures: `CoreExplorerLite --play --level 1 --overview --frames 40 --capture overview.png`; `--warp x y z` starts the courier elsewhere.
+The game uses the coursework movement and rendering scope; advanced wall actions, audio, shadows and bloom are not included. `gameplay_tests` also covers Helios Yard: the map's pieces and materials, a clear spawn, permanent unlocks for ground-level and raised doors, portal linking and crossing, restart, shock damage and sprint. Captures: `CoreExplorer --play --level 1 --overview --frames 40 --capture overview.png`; `--warp x y z` starts the courier elsewhere.
 
 ## Coursework reference
 
-The original assignment requirements are retained in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md). ProjectPlan.pdf is the previously submitted plan for the earlier version; it has not been rewritten to describe this reduced build. This build now includes a core-collection objective and exit completion; a final report is still not included, and this is not a claim of full assignment compliance.
+The original assignment requirements are retained in [docs/ASSIGNMENT.md](docs/ASSIGNMENT.md). ProjectPlan.pdf is the previously submitted plan for the earlier version; it has not been rewritten to describe this reduced build. This build now includes a core-collection objective and exit completion; the current report is [Report.pdf](Report.pdf), with editable source and measurement evidence in `report/`. Final submission must go to your allocated course GitLab repository on `main`; GitHub is the collaboration mirror.
 
 ## Core collection tutorial
 
@@ -116,13 +128,17 @@ Member-A `1af555e` is merged into Member-B `caab965`, retaining both branch hist
 
 The minimap is visible in all three levels by default. Press **M** to show or hide it for the current session; M is reserved from key rebinding. The circular map follows 70% of a camera turn, then smoothly settles to the view heading. It shows the current floor, remaining cores, doors, controls, portals and exit. The exit HUD marker avoids the map only while it is visible. While moving, the robot follows the camera heading (including strafing and reversing); when stopped, the camera can orbit without turning the robot. Tunnel probes use actual movement direction and do not force the idle orbit behind the robot.
 
-The earlier minimap contribution `c48d28c` and camera/map update `caab965` retain their original author. The historical cubemap contribution remains available in Git history and the legacy Skybox source/assets; the current renderer uses the procedural sky described in [docs/SKYBOX.md](docs/SKYBOX.md).
+The earlier minimap contribution `c48d28c` and camera/map update `caab965` retain their original author. The historical cubemap contribution remains available in Git history; the current renderer uses the procedural sky described in [docs/SKYBOX.md](docs/SKYBOX.md).
 
-Member-B's bundled `vendor/` dependencies, `toolchain/` and legacy `Playable/` package are retained. Build this merged source with **BuildAndRun.cmd** (or `BuildAndRun.cmd --build-only`); **Play.cmd** delegates to it so the legacy executable is not mistaken for the merged build. Incremental builds only rebuild changed files. `SOURCE-README.md` and `Playable/` describe an older snapshot; use this README and `build/CoreExplorerLite.exe` for the current version. The November 7 GitHub Release is also unchanged by this source merge.
+The source-only build now fetches pinned upstream libraries instead of redistributing downloaded dependency trees and Windows tools. Member-B's `4ca727b` map/route corrections are integrated. All six game test suites pass on Windows and CSE (GCC 14.2 / CMake 3.31.6 / Make 4.4.1): gameplay, tutorial route, Corona route, surveillance camera, Helios four-core route, and the new exit-gate hierarchy suite. All three CSE level render checks and the gate animation check reported zero OpenGL errors. Short key taps are queued for reliable VNC controls, and the initial window fits smaller remote desktops. The editor is outside these game tests.
 
-Validation includes the existing `lite_gameplay`, `tutorial_showcase` and `corona_run` CTest suites, including the teammate's idle-orbit/moving-follow tests and both new level routes.
+## Second hierarchical model: exit gate
 
-## Lite timer and impact feedback
+The gate is rendered through the same articulated-node traversal as the robot. The root owns the frame, rail and lights; independent left/right panels own their stripes, insets and handles; each handle owns a grip. Collecting the final core unlocks the gate, rotates the handles and slides the panels apart over 0.85 seconds with smooth start/stop easing. Mesh sizes do not scale child joint offsets. Shared panel dimensions and motion keep collision and rendering aligned; restarting closes and resets the entire gate.
+
+To inspect it immediately: `CoreExplorer --effect gate` plays the opening animation. `--effect gate-closed`, `gate-opening` and `gate-open` prepare frozen poses; F4 resumes simulation. Normal gameplay still opens the gate by collecting every core. The `gate_hierarchy` test checks global/local transforms, child inheritance, actual draw-list integration, collision clearance, walking completion, reset and frame-rate independence.
+
+## Timer and impact feedback
 
 The Tutorial Yard has unlimited time (an infinity glyph). The missions count down from their own limits (Helios 10:00, Corona Run 5:00), displayed as minutes:seconds and highlighted during the last 30 seconds. Timing pauses with the pause/settings menu or loss of focus and freezes on completion/failure. At zero, TIME UP ends the challenge without applying damage. Restart or level change restores the appropriate limit. Result panels show remaining time or UNLIMITED.
 
@@ -142,7 +158,7 @@ Each yard has a flush cyan pad with two concentric rings and a centre dot (tutor
 
 Normal mapping is enabled by default. During play: **F1** toggles diagnostics, **F2** toggles normal mapping, **F3** shows OFF on the left and ON on the right, **F4** freezes/unfreezes simulation, **F5** cycles normal strength (0 to 2), **F6** toggles hidden-face removal for the core optimisation comparison. These keys are reserved from gameplay rebinding. Diagnostics show camera position, FOV, geometry/draw counts and live particle occupancy. The normal HUD remains frameless and unchanged with diagnostics closed.
 
-See [docs/CHALLENGES.md](docs/CHALLENGES.md) for implementation, reproducible demonstrations and the exact benchmark procedure. No third challenge is claimed: hidden-face removal is the core optimisation. Linux/VLAB verification and the final assessed report remain outstanding.
+See [docs/CHALLENGES.md](docs/CHALLENGES.md) for implementation, reproducible demonstrations and the exact benchmark procedure. No third challenge is claimed: hidden-face removal is the core optimisation. The current report and raw measurements are in `Report.pdf` and `report/evidence/`; see the verification record for platform-specific results.
 
 ## Space-test-facility materials
 

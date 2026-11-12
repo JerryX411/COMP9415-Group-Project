@@ -49,7 +49,7 @@ Evaluation of a Voxel-Based Platform Game\par}
 {\large Jacky Hui (Member A) \qquad Jerry Xie (Member B)\par}
 \end{center}
 \begin{abstract}
-This report presents the design and evaluation of Core Explorer, a third-person voxel platform game implemented in C++17 and OpenGL 3.3 Core. A $96^3$ voxel representation supports an untimed training environment and two missions with different navigation and movement demands. The implementation combines hierarchical robot and gate models, world-space Blinn--Phong lighting, procedural normal maps and a bounded event-driven particle system. Hidden-face removal is evaluated against a baseline that submits all voxel faces. At a $1920\times1080$ framebuffer resolution, with 60 warm-up frames and 240 measured frames per run, the optimisation reduces mean scene-rendering time by 8.1--19.7\% across the three configurations on an RTX 4060 Laptop GPU. The results demonstrate a reduction in geometry cost without changing draw-call counts. Remaining map/test inconsistencies and unverified VLAB/CSE execution limit conclusions about end-to-end gameplay completeness and platform portability.
+This report presents the design and evaluation of Core Explorer, a third-person voxel platform game implemented in C++17 and OpenGL 3.3 Core. A $96^3$ voxel representation supports an untimed training environment and two missions with different navigation and movement demands. The implementation combines hierarchical robot and gate models, world-space Blinn--Phong lighting, procedural normal maps and a bounded event-driven particle system. Hidden-face removal is evaluated against a baseline that submits all voxel faces. At a $1920\times1080$ framebuffer resolution, with 60 warm-up frames and 240 measured frames per run, the optimisation reduces mean scene-rendering time by 7.2--20.6\% across the three configurations on an RTX 4060 Laptop GPU. The results demonstrate a reduction in geometry cost without changing draw-call counts. All six regression suites pass on Windows and CSE, including complete input-driven routes. CSE rendering checks also pass; fixed-view timings remain specific to the measured Windows hardware.
 \end{abstract}
 \vspace{2pt}
 \noindent\textbf{Keywords:} voxel rendering; hierarchical modelling; normal mapping; particle systems; performance evaluation.
@@ -68,8 +68,8 @@ Core Explorer is a single-player, third-person voxel platform game. A repair rob
 \textbf{Configuration} & \textbf{Current layout} & \textbf{Objective and distinguishing mechanics}\\
 \midrule
 Tutorial Yard & $32\times32$, 3 cores & Untimed; crawl passage, relay-controlled shock floor, moving obstacle, ground/upper doors, jump pad and portal pair.\\
-Helios Yard & $84\times60$, 4 cores & 600 seconds; four districts with rooftop access, electric-floor traversal and layered/corridor mazes; five pressure-plate doors and one portal pair.\\
-Corona Run & $76\times76$, 9 cores & 300 seconds; elevated parkour above a hazardous red floor, narrow beams, gaps and moving obstacles; four checkpoints and four jump pads, without portals.\\
+Helios Yard & $84\times60$, 4 cores & 600 seconds; four districts with rooftop access, electric-floor traversal and layered/corridor mazes; four pressure-plate doors and one portal pair.\\
+Corona Run & $76\times76$, 9 cores & 300 seconds; elevated parkour above a hazardous red floor, narrow beams, gaps and moving obstacles; seven checkpoints, five moving obstacles and four jump pads, without portals.\\
 \bottomrule
 \end{tabularx}
 \end{table*}
@@ -100,11 +100,11 @@ C++17 and OpenGL 3.3 Core render true 3D geometry with a depth buffer. Terrain i
 \begin{figure*}[t]
 \centering
 \includegraphics[width=.85\linewidth,trim=0bp 130bp 80bp 170bp,clip]{perspective-diagnostics.png}
-\caption{Perspective scene with live diagnostics: 71,781 submitted triangles, eight draw calls, 1,924 solid voxels and 3,726 exposed faces. Camera position is $(22.73,6.10,38.41)$ with a $58^\circ$ vertical field of view. The screenshot is cropped to emphasise scene geometry and the diagnostic overlay.}\label{fig:diagnostics}
+\caption{Perspective scene with live diagnostics: 72,397 submitted triangles, eight draw calls, 1,924 solid voxels and 3,726 exposed faces. Camera position is $(22.73,6.10,38.41)$ with a $58^\circ$ vertical field of view. The screenshot is cropped to emphasise scene geometry and the diagnostic overlay.}\label{fig:diagnostics}
 \end{figure*}
 
 \subsection{Two multipart hierarchies}
-For node $i$, the inherited joint matrix is $J_i=J_{p(i)}T_iR_{x,i}R_{y,i}R_{z,i}$; a root uses the object's world transform. Its drawn mesh uses $M_i=J_iS_i$. Keeping mesh dimensions out of the inherited joint transform prevents a scaled torso from stretching the arms. The robot's root handles world motion/yaw, while children supply gait and reaction poses. The exit gate has a separate root and independently translating panels (Figure~\ref{fig:hierarchy}); handles and stripes follow their parent panel.
+For node $i$, the inherited joint matrix is $J_i=J_{p(i)}T_iR_{x,i}R_{y,i}R_{z,i}$; a root uses the object's world transform. Its drawn mesh uses $M_i=J_iS_i$. Keeping mesh dimensions out of the inherited joint transform prevents a scaled torso from stretching the arms. The robot's root handles world motion/yaw, while children supply gait and reaction poses. The exit gate has a separate root and independently translating panels (Figure~\ref{fig:hierarchy}); handles and stripes follow their parent panel, and each grip inherits its handle transform. Frame and panel dimensions are shared with the collision system.
 
 \begin{figure*}[t]
 \centering
@@ -121,7 +121,7 @@ For node $i$, the inherited joint matrix is $J_i=J_{p(i)}T_iR_{x,i}R_{y,i}R_{z,i
 \node[box] (g) at (6.7,0) {Exit-gate root};
 \node[box] (f) at (5.1,-.9) {Posts, lintel, lamp};
 \node[box] (d) at (8,-.9) {Left/right panel};
-\node[box] (s) at (8,-1.8) {Stripe, handle};
+\node[box] (s) at (8,-1.8) {Stripe, handle $\to$ grip};
 \draw[edge] (g)--(f);\draw[edge] (g)--(d);\draw[edge] (d)--(s);
 \end{tikzpicture}
 \caption{Simplified parent-child graph of the two textured articulated models. Each left/right branch is instantiated separately.}\label{fig:hierarchy}
@@ -186,25 +186,26 @@ During simulation substeps, particles lose lifetime and integrate gravity and ex
 \end{figure*}
 
 \subsection{Purposeful hierarchical animation}
-\code{CourierPose} poses the skeleton from movement and interaction state. Gait phases coordinate hip, knee and ankle rotation, with arm swing and torso motion; sprinting changes cadence and stride. Crouching lowers the pose, while jump, impact and shutdown states provide distinct feedback. Squash/stretch and body hop are visual offsets around the feet. The exit gate translates its two child panels when all cores are collected. Local animation therefore remains independent of the object's root position and orientation; it is procedural animation rather than a rigid-body ragdoll (Figure~\ref{fig:poses}).
+\code{CourierPose} poses the skeleton from movement and interaction state. Gait phases coordinate hip, knee and ankle rotation, with arm swing and torso motion; sprinting changes cadence and stride. Crouching lowers the pose, while jump, impact and shutdown states provide distinct feedback. Squash/stretch and body hop are visual offsets around the feet. The exit gate opens over 0.85 seconds after the last core. For normalised time $t$, the panel offset uses $6t^5-15t^4+10t^3$, with zero endpoint velocity/acceleration. Handles rotate locally, their grips follow, and five rail lights indicate opening progress. Restart resets all joint poses. Local animation therefore remains independent of the object's root position and orientation; it is procedural animation rather than a rigid-body ragdoll (Figure~\ref{fig:poses}).
 
 \begin{figure*}[t]
 \centering
-\begin{minipage}[t]{.32\linewidth}\centering\includegraphics[width=\linewidth,trim=600bp 320bp 600bp 370bp,clip]{normal-on.png}\par\small\textbf{Standing}\end{minipage}\hfill
-\begin{minipage}[t]{.32\linewidth}\centering\includegraphics[width=\linewidth,trim=590bp 310bp 610bp 380bp,clip]{run.png}\par\small\textbf{Running}\end{minipage}\hfill
-\begin{minipage}[t]{.32\linewidth}\centering\includegraphics[width=\linewidth,trim=600bp 300bp 600bp 390bp,clip]{pad.png}\par\small\textbf{Pad ascent}\end{minipage}
-\caption{Contrasting robot poses, enlarged from gameplay captures. Different joint angles, body height and limb placement make locomotion state visible.}\label{fig:poses}
+\begin{minipage}[t]{.23\linewidth}\centering\includegraphics[width=\linewidth,trim=590bp 310bp 610bp 380bp,clip]{run.png}\par\small\textbf{Running}\end{minipage}\hfill
+\begin{minipage}[t]{.23\linewidth}\centering\includegraphics[width=\linewidth,trim=600bp 300bp 600bp 390bp,clip]{pad.png}\par\small\textbf{Pad ascent}\end{minipage}\hfill
+\begin{minipage}[t]{.25\linewidth}\centering\includegraphics[width=\linewidth,trim=540bp 470bp 280bp 110bp,clip]{gate-closed.png}\par\small\textbf{Gate closed}\end{minipage}\hfill
+\begin{minipage}[t]{.25\linewidth}\centering\includegraphics[width=\linewidth,trim=540bp 470bp 280bp 110bp,clip]{gate-open.png}\par\small\textbf{Gate open}\end{minipage}
+\caption{Both articulated objects in actual gameplay captures. Robot joints express movement; gate panels translate while handles rotate locally and the frame stays fixed.}\label{fig:poses}
 \end{figure*}
 
 \subsection{Validation boundary}
-The event captures completed without reported OpenGL errors and showed the expected particle counts; the impact capture also reduced armour from five to four. Tests cover movement, damage cooldown, particle motion/recycling, restart state and pad emission. However, the gameplay test executable stops at a later Helios layout assertion, and route validation is incomplete (Section~\ref{sec:eval}). These observations support specific mechanisms, not a claim that every mission can currently be completed.
+The event captures completed without reported OpenGL errors and showed the expected particle counts; impact also reduced armour from five to four. Tests cover movement, damage cooldown, particle motion/recycling, restart and pad emission. All three complete-route tests pass. The gate test additionally verifies inherited transforms, actual scene instances, visible/collision clearance, walking through the exit, reset, and equivalent animation timing at 30/60/120 Hz.
 
 
 \section{Experimental Evaluation}\label{sec:eval}
 \subsection{Controlled comparison}
 The core optimisation removes a voxel face when its neighbouring cell is occupied. The baseline emits all six faces of every solid voxel. Both modes use the same instance grouping, shaders and effects; hidden-face removal is the only changed variable and is not counted again as an acceleration challenge. F6 toggles this optimisation interactively. Static terrain is rebuilt when the world revision or mode changes, outside the timed boundary.
 
-Measurements were collected on 12 November using a Windows Release build (GCC 16.2.0), NVIDIA GeForce RTX 4060 Laptop GPU, driver 621.01, OpenGL 3.3. Each run used a \textbf{1920$\times$1080 framebuffer}, VSync off, \textbf{60 unmeasured warm-up frames} and \textbf{exactly 240 measured scene-render frames}. Each mode was repeated three times, alternating order. Table~\ref{tab:perf} averages those three 240-frame arithmetic means; every row has equal weight.
+Measurements were collected on 13 November using a Windows Release build (GCC 16.2.0), NVIDIA GeForce RTX 4060 Laptop GPU, driver 621.01, OpenGL 3.3. Each run used a \textbf{1920$\times$1080 framebuffer}, VSync off, \textbf{60 unmeasured warm-up frames} and \textbf{exactly 240 measured scene-render frames}. Each mode was repeated three times, alternating order. Table~\ref{tab:perf} averages those three 240-frame arithmetic means; every row has equal weight.
 
 All scenes use the $96^3$ world and their fixed authored level files (no layout generation seed). The player is placed on the first jump pad, simulated for $24\times1/120=0.2$ seconds, then frozen with 35 active particles. The camera is at $(20,17,38)$, looking at $(20,1,19)$ with up $(0,1,0)$; vertical FOV is $50^\circ$, near/far planes 0.1/300. Normal mapping is ON at strength 1; the procedural sky and all prepared scene effects are included with render time fixed at zero. The same camera is retained across modes and levels; it samples a fixed view, not an entire play-through.
 
@@ -215,43 +216,43 @@ All scenes use the $96^3$ world and their fixed authored level files (no layout 
 \begin{tabular}{@{}lrrrll@{}}\toprule
 &\multicolumn{2}{c}{\textbf{Mean ms/frame}}&&&\\
 \textbf{Scene} & \textbf{Base} & \textbf{Opt.} & \textbf{Reduction} & \textbf{Triangles: base $\to$ opt.} & \textbf{Draws}\\\midrule
-Tutorial & 2.606 & 2.395 & 8.1\% & 93,129 $\to$ 77,493 & 9 $\to$ 9\\
-Helios & 3.019 & 2.470 & 18.2\% & 380,137 $\to$ 222,713 & 10 $\to$ 10\\
-Corona & 2.929 & 2.353 & 19.7\% & 321,017 $\to$ 170,173 & 10 $\to$ 10\\\bottomrule
+Tutorial & 2.806 & 2.605 & 7.2\% & 93,745 $\to$ 78,109 & 9 $\to$ 9\\
+Helios & 3.426 & 2.801 & 18.3\% & 378,425 $\to$ 221,033 & 10 $\to$ 10\\
+Corona & 3.355 & 2.664 & 20.6\% & 322,725 $\to$ 171,881 & 10 $\to$ 10\\\bottomrule
 \end{tabular}
 \end{table*}
 
-\textbf{Interpretation.} Triangle counts decrease by 16.8\%, 41.4\% and 47.0\%, respectively. Draw-call counts are unchanged because culling reduces the terrain mesh, not the number of material/instance batches. Timing gains are smaller than geometry reductions: sky shading, other fragments and fixed draw overhead remain. Across repeats, baseline/optimised ranges were 2.549--2.635/2.369--2.426 ms (Tutorial), 2.950--3.154/2.467--2.475 ms (Helios), and 2.851--3.080/2.339--2.377 ms (Corona). These are local observations, not cross-device guarantees.
+\textbf{Interpretation.} Triangle counts decrease by 16.7\%, 41.6\% and 46.7\%, respectively. Draw-call counts are unchanged because culling reduces the terrain mesh, not the number of material/instance batches. Timing gains are smaller than geometry reductions: sky shading, other fragments and fixed draw overhead remain. Across repeats, baseline/optimised ranges were 2.760--2.856/2.552--2.653 ms (Tutorial), 3.390--3.478/2.772--2.835 ms (Helios), and 3.326--3.393/2.630--2.694 ms (Corona). These are local observations, not cross-device guarantees.
 
 \textbf{Timing boundary and image checks.} \code{glFinish} drains previous work before the CPU timer and waits for scene completion before stopping it. Thus the result includes scene submission and completion, not a pure GPU timestamp. Loading, mesh preparation, simulation, ImGui, screenshot capture and buffer swapping are excluded. First-pair baseline/optimised screenshots differed in fewer than 0.005\% of pixels, with mean absolute RGB error below 0.002 on the 0--255 scale; they are nearly, but not exactly, identical. Exact CSVs and source fingerprints accompany the editable report.
 
 \textbf{Reproduction.} The benchmark is invoked from the repository root using \code{-{}-benchmark}, \code{-{}-level 0} and \code{-{}-benchmark-output tutorial.csv}. Levels 1 and 2 select Helios and Corona, respectively. The executable performs all six measurements per level and saves the first baseline/optimised image pair. Use the current source and level files: the November 7 binary and older benchmark tables describe different scenes.
 
 \subsection{Current validation status}
-The Windows game and five game-test targets build successfully. Of six registered CTest suites, tutorial and surveillance-camera suites pass. The editor and Corona suites expect ten Corona cores (now nine), and the Corona suite also expects at least eight movers (now six); the gameplay suite expects six Helios doors/plates (now five); the Helios route search cannot reach the indexed west inner plate. This leaves three game suites plus the editor suite failing. These failures require map/test reconciliation and route revalidation. A successful VLAB/CSE build and play-through has not yet been established for this snapshot.
+A clean Windows Release build fetched all dependencies without local overrides and passed all six game suites. The same source was cloned and built through TigerVNC on CSE host vx20 with CMake 3.31.6, GNU Make 4.4.1 and GCC 14.2. All six suites passed there. Each of the three level captures and the live gate-opening check reported zero OpenGL errors. Route tests use movement, jumping and interaction inputs to reach completion; the separate gate fixture test uses controlled placements to isolate collision/animation. VNC quick-tap testing exposed missed between-frame key presses; queued press events now preserve toggles without leaving movement held. Initial window size also adapts to small VLAB desktops. These checks do not constitute exhaustive human play-testing. The local map editor and downloaded dependencies are excluded from the assessed source tree.
 
 
 \section{Contributions and Discussion}\label{sec:discussion}
 \subsection{Responsibilities and integration}
 \textbf{Jacky Hui is Member A, and Jerry Xie is Member B.} Their responsibilities follow the division established in the revised project plan. \textbf{Member A (Jacky Hui)} covers player movement and interactions, hazards, lives/checkpoints, training, controls and menus, robot animation, gameplay feedback and particle lifecycle. \textbf{Member B (Jerry Xie)} covers voxel terrain and level layouts, materials and lighting, normal mapping, environment rendering, optimisation measurement and the planned VLAB/CSE validation. Both roles meet at mechanism placement, scene state, camera behaviour, regression testing and the demonstration.
 
-Relevant history includes \code{53a3ba9} (jump-pad plume/trail), \code{8ae7ec6} (five procedural materials), \code{8909214} (normal/particle demonstrations and benchmarks), and \code{1af555e} (tutorial, Corona and reboot integration). Jerry's \code{735305f} adds the minimap and mouse-linked facing; \code{e71999d} documents its integration. These commits locate feature/integration evidence; the responsibility split is not a claim that each commit has the corresponding member as its sole author. Measurements include local changes after \code{1af555e}.
+Relevant history includes \code{53a3ba9} (jump-pad plume/trail), \code{8ae7ec6} (five procedural materials), \code{8909214} (normal/particle demonstrations and benchmarks), and \code{1af555e} (tutorial, Corona and reboot integration). Jerry's \code{735305f} adds the minimap and mouse-linked facing; \code{e71999d} documents its integration. These commits locate feature/integration evidence; the responsibility split is not a claim that each commit has the corresponding member as its sole author. Member-B's \code{4ca727b} reconciles current maps and route tests. This evaluation includes the subsequent hierarchical exit-gate changes.
 
 \subsection{Individual technical reflections}
-\textbf{Member A (Jacky Hui).} The main lesson in the gameplay role is to separate presentation from authoritative simulation state. Limb animation and recoil should communicate movement without moving the collision body through walls. Death, reboot, pause and full restart also need different reset rules: retaining cores during recovery must not retain them after a new run. Event captures help inspect this feedback, while state-based tests are needed to check timers, cooldowns and particle cleanup. The remaining route failures show why visible local mechanisms are insufficient evidence of a complete playable mission.
+\textbf{Member A (Jacky Hui).} The main lesson in the gameplay role is to separate presentation from authoritative simulation state. Limb animation and recoil should communicate movement without moving the collision body through walls. Death, reboot, pause and full restart also need different reset rules: retaining cores during recovery must not retain them after a new run. Event captures help inspect this feedback, while state-based tests are needed to check timers, cooldowns and particle cleanup. Complete input-driven route tests complement the local mechanism checks and catch map changes that otherwise look correct in screenshots.
 
-\textbf{Member B (Jerry Xie).} The rendering role highlights the importance of consistent coordinate spaces and controlled comparisons. A normal map needs a correct UV basis, especially on scaled and curved parts; extra texture detail alone does not establish correctness. Hidden-face removal substantially reduces submitted triangles, but scene time also depends on shader and fixed costs. Level-file edits must be reconciled with mechanism indices and route tests before freezing the final scenes. The outstanding platform check remains an essential part of this role's planned delivery.
+\textbf{Member B (Jerry Xie).} The rendering role highlights the importance of consistent coordinate spaces and controlled comparisons. A normal map needs a correct UV basis, especially on scaled and curved parts; extra texture detail alone does not establish correctness. Hidden-face removal substantially reduces submitted triangles, but scene time also depends on shader and fixed costs. Level-file edits must be reconciled with mechanism indices and route tests before freezing the final scenes. Testing the clean source on CSE also exposed the need to separate reproducible dependency fetching from machine-specific build tools.
 
-\subsection{Comparison with the Project Plan} The two selected challenges remain Normal Mapping and Particles. The implementation replaces the earlier courtyard/corridor missions with Helios and Corona, grows storage from $64^3$ to $96^3$, reduces the particle pool from 1,024 to 128, and uses a procedural sky. Optional power-ups/speed pads from the plan are outside the current authored levels. Reboot timing and progression rules have also changed. Final-stage priorities are resolving map/test mismatches, validating complete routes on VLAB/CSE, and refreshing evidence after changes.
+\subsection{Comparison with the Project Plan} The two selected challenges remain Normal Mapping and Particles. The implementation replaces the earlier courtyard/corridor missions with Helios and Corona, grows storage from $64^3$ to $96^3$, reduces the particle pool from 1,024 to 128, and uses a procedural sky. Optional power-ups/speed pads from the plan are outside the current authored levels. Reboot timing and progression rules have also changed. Map/test mismatches are reconciled, all routes pass, CSE build/render checks are complete, and the measurements reflect the current scene. Submission packaging and the live demonstration use this same source.
 
 
 \subsection{External Software and Assets}
-The project extends the course starter's window, shader and UI foundation. CMake \code{FetchContent} integrates GLFW for window/context management and input~\cite{glfw}, GLAD for OpenGL function loading~\cite{glad}, GLM for vector and matrix mathematics~\cite{glm}, Dear ImGui and its GLFW/OpenGL backends for the interface~\cite{imgui}, and stb for image input/output~\cite{stb}. The evaluated build uses existing local dependency overrides; declared versions and licence sources are provided in the references.
+The project extends the course starter's window, shader and UI foundation. CMake \code{FetchContent} integrates GLFW for window/context management and input~\cite{glfw}, GLAD for OpenGL function loading~\cite{glad}, GLM for vector and matrix mathematics~\cite{glm}, Dear ImGui and its GLFW/OpenGL backends for the interface~\cite{imgui}, and stb for image input/output~\cite{stb}. The clean source build fetches pinned upstream versions; declared versions and licence sources are provided in the references. Downloaded dependencies and build tools are excluded from the submission.
 
 Geometry, material textures and the current star sky are generated by project code; no external model or sky photograph is used in the reported captures. The bundled Rajdhani SemiBold font is distributed under SIL OFL 1.1~\cite{rajdhani}. On Windows, the application may instead load Segoe UI Bold from the installed system; its font file is not redistributed with the project~\cite{segoe}.
 
 \section{Conclusion}
-Core Explorer integrates voxel collision, articulated modelling, material shading and event-driven feedback within three distinct configurations. The controlled benchmark shows that removing internal voxel faces reduces submitted triangles and scene-rendering time, while substantial shader and fixed rendering costs remain. Normal-map comparisons and event captures provide evidence for the two selected challenge tasks. Complete-route validation, reconciliation of map-dependent tests and verification on VLAB/CSE remain necessary before the evaluated development version can be treated as a final submission.
+Core Explorer integrates voxel collision, articulated modelling, material shading and event-driven feedback within three distinct configurations. The controlled benchmark shows that removing internal voxel faces reduces submitted triangles and scene-rendering time, while substantial shader and fixed rendering costs remain. Normal-map comparisons and event captures provide evidence for the two selected challenge tasks. Complete routes and gate animation/collision now pass on Windows and CSE. The evaluated timings describe frozen views on one GPU; wider hardware coverage and human navigation studies remain beyond this evaluation.
 
 \balance
 \begin{thebibliography}{7}

@@ -1,22 +1,22 @@
 {
   "tutorial": {
-    "baseline_mean": 2.605543,
-    "optimized_mean": 2.395204,
-    "reduction_percent": 8.072751054194837,
+    "baseline_mean": 2.8056443333333334,
+    "optimized_mean": 2.604662333333333,
+    "reduction_percent": 7.163488173186128,
     "baseline_range": [
-      2.549475,
-      2.634958
+      2.760387,
+      2.855592
     ],
     "optimized_range": [
-      2.368808,
-      2.426208
+      2.551817,
+      2.652858
     ],
     "image_MAE": 0.0016737397119341564,
     "image_diff_pixel_percent": 0.00390625,
     "counts": [
       {
         "mode": "baseline",
-        "triangles": "93129",
+        "triangles": "93745",
         "draw_calls": "9",
         "solid_voxels": "1924",
         "exposed_faces": "3726",
@@ -24,7 +24,7 @@
       },
       {
         "mode": "optimized",
-        "triangles": "77493",
+        "triangles": "78109",
         "draw_calls": "9",
         "solid_voxels": "1924",
         "exposed_faces": "3726",
@@ -33,56 +33,56 @@
     ]
   },
   "helios": {
-    "baseline_mean": 3.018675,
-    "optimized_mean": 2.469636,
-    "reduction_percent": 18.188079206936823,
+    "baseline_mean": 3.426433333333333,
+    "optimized_mean": 2.8008290000000002,
+    "reduction_percent": 18.258179058885325,
     "baseline_range": [
-      2.949529,
-      3.154475
+      3.390342,
+      3.477679
     ],
     "optimized_range": [
-      2.466946,
-      2.474904
+      2.771554,
+      2.834837
     ],
     "image_MAE": 0.0014671746399176956,
     "image_diff_pixel_percent": 0.002459490740740741,
     "counts": [
       {
         "mode": "baseline",
-        "triangles": "380137",
+        "triangles": "378425",
         "draw_calls": "10",
-        "solid_voxels": "17596",
-        "exposed_faces": "26864",
+        "solid_voxels": "17592",
+        "exposed_faces": "26856",
         "particles": "35"
       },
       {
         "mode": "optimized",
-        "triangles": "222713",
+        "triangles": "221033",
         "draw_calls": "10",
-        "solid_voxels": "17596",
-        "exposed_faces": "26864",
+        "solid_voxels": "17592",
+        "exposed_faces": "26856",
         "particles": "35"
       }
     ]
   },
   "corona": {
-    "baseline_mean": 2.9285136666666665,
-    "optimized_mean": 2.3528473333333335,
-    "reduction_percent": 19.657286899008252,
+    "baseline_mean": 3.3548446666666667,
+    "optimized_mean": 2.663740666666667,
+    "reduction_percent": 20.60017880609275,
     "baseline_range": [
-      2.850883,
-      3.080075
+      3.326496,
+      3.393246
     ],
     "optimized_range": [
-      2.339363,
-      2.377029
+      2.629942,
+      2.693642
     ],
-    "image_MAE": 0.001869212962962963,
-    "image_diff_pixel_percent": 0.004581404320987655,
+    "image_MAE": 0.0018796617798353908,
+    "image_diff_pixel_percent": 0.004629629629629629,
     "counts": [
       {
         "mode": "baseline",
-        "triangles": "321017",
+        "triangles": "322725",
         "draw_calls": "10",
         "solid_voxels": "17451",
         "exposed_faces": "29284",
@@ -90,17 +90,13 @@
       },
       {
         "mode": "optimized",
-        "triangles": "170173",
+        "triangles": "171881",
         "draw_calls": "10",
         "solid_voxels": "17451",
         "exposed_faces": "29284",
         "particles": "35"
       }
     ]
-  },
-  "normal": {
-    "zero_equals_off": false,
-    "on_off_MAE": 2.3450051440329216
   },
   "tutorial_showcase_objects": {
     "core": 3,
@@ -114,8 +110,8 @@
   },
   "helios_yard_objects": {
     "core": 4,
-    "door": 5,
-    "plate": 5,
+    "door": 4,
+    "plate": 4,
     "trap": 48,
     "mover": 6,
     "checkpoint": 0,
@@ -127,8 +123,8 @@
     "door": 0,
     "plate": 0,
     "trap": 15,
-    "mover": 6,
-    "checkpoint": 4,
+    "mover": 5,
+    "checkpoint": 7,
     "jumppad": 4,
     "portal": 0
   }

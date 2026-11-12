@@ -5,8 +5,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 if (-not $Executable) {
-    $Executable = Join-Path $projectRoot 'build/CoreExplorerLite.exe'
-    if (-not (Test-Path -LiteralPath $Executable)) { $Executable = Join-Path $projectRoot 'build/Release/CoreExplorerLite.exe' }
+    $Executable = Join-Path $projectRoot 'build/CoreExplorer.exe'
+    if (-not (Test-Path -LiteralPath $Executable)) { $Executable = Join-Path $projectRoot 'build/Release/CoreExplorer.exe' }
 }
 if (-not $Destination) { $Destination = Join-Path $projectRoot 'output/report-reproduction' }
 $resolvedExecutable = (Resolve-Path -LiteralPath $Executable).Path
