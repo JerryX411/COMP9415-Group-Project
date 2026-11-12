@@ -33,6 +33,16 @@ Window::Window(int width, int height, const std::string& title) {
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 #endif
 
+  // VLAB desktops can be smaller than the preferred 1440x900 window.
+  // Leave room for decorations so the complete HUD and menus stay reachable.
+  if (auto* monitor = glfwGetPrimaryMonitor()) {
+    int x=0,y=0,workWidth=0,workHeight=0;
+    glfwGetMonitorWorkarea(monitor,&x,&y,&workWidth,&workHeight);
+    if(workWidth>0&&workHeight>0) {
+      width=std::min(width,std::max(320,workWidth-64));
+      height=std::min(height,std::max(240,workHeight-64));
+    }
+  }
   handle_ = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
   if (handle_ == nullptr) {
     glfwTerminate();
