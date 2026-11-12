@@ -57,6 +57,7 @@ class SceneModels {
   static glm::mat4 fallTransform(const Player& player);
   void appendMenu(float time, std::vector<Instance>& output, glm::vec2 look = {});
   void poseRobot(const Player& player);
+  void poseGate(float openness, bool unlocked);
   const ArticulatedModel& robot() const { return robot_; }
   const ArticulatedModel& gate() const { return gate_; }
  private:
@@ -77,6 +78,9 @@ class SceneModels {
   ArticulatedModel robot_, gate_;
   int hipL_ = 0, hipR_ = 0, shoulderL_ = 0, shoulderR_ = 0;
   int head_ = 0, body_ = 0, doorL_ = 0, doorR_ = 0, lamp_ = 0;
+  int latchL_ = 0, latchR_ = 0;
+  std::array<int,2> gateStripes_{};
+  std::array<int,5> gateIndicators_{};
   int elbowL_ = 0, elbowR_ = 0, kneeL_ = 0, kneeR_ = 0, ankleL_ = 0, ankleR_ = 0;
   int handR_ = 0;
   int packLight_=0;

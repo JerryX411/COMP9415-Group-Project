@@ -1,25 +1,86 @@
 cmake_minimum_required(VERSION 3.18)
+
 project(CoreExplorerLite LANGUAGES C CXX)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(FetchContent)
 include(CTest)
+
+# GLFW: window, OpenGL context, and input.
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-add_subdirectory(vendor/glfw)
-add_subdirectory(vendor/glm)
-set(imgui_SOURCE_DIR "${PROJECT_SOURCE_DIR}/vendor/imgui")
-set(stb_SOURCE_DIR "${PROJECT_SOURCE_DIR}/vendor/stb")
+FetchContent_Declare(
+    glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw.git
+    GIT_TAG 3.3.10
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(glfw)
+
+# GLAD 2: OpenGL 3.3 core loader for Windows and Linux.
+# macOS uses its system OpenGL 3 core headers and framework.
+if(NOT APPLE)
+    FetchContent_Declare(
+        glad
+        GIT_REPOSITORY https://github.com/dav1dde/glad.git
+        GIT_TAG v2.0.8
+        GIT_SHALLOW TRUE
+        SOURCE_SUBDIR cmake
+    )
+    FetchContent_MakeAvailable(glad)
+
+    glad_add_library(
+        craft_glad_gl_core_33
+        STATIC
+        REPRODUCIBLE
+        API gl:core=3.3
+    )
+endif()
+
+# GLM: vector and matrix mathematics.
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 1.0.3
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(glm)
+
+# Dear ImGui: runtime debug UI. Its sources are added in src/CMakeLists.txt.
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.92.9b
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(imgui)
+
+# stb: image decoding and image-file writing.
+# The upstream repository does not define a CMake target, so expose its
+# single-header libraries through a small interface target.
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20
+    # A pinned commit may be older than a shallow clone's tip.
+    GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(stb)
+
 add_library(stb_headers INTERFACE)
 add_library(stb::headers ALIAS stb_headers)
-target_include_directories(stb_headers SYSTEM INTERFACE "${stb_SOURCE_DIR}")
-if(NOT APPLE)
- add_library(craft_glad_gl_core_33 STATIC vendor/glad/src/gl.c)
- target_include_directories(craft_glad_gl_core_33 PUBLIC vendor/glad/include)
-endif()
+target_include_directories(stb_headers SYSTEM INTERFACE
+    ${stb_SOURCE_DIR}
+)
+
 add_subdirectory(src)
+
 if(BUILD_TESTING)
- add_subdirectory(tests)
+    add_subdirectory(tests)
 endif()

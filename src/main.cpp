@@ -48,7 +48,24 @@ int main(int argc,char** argv) {
   craft::app::AppUi ui(window); relay::Game game; game.reset(level);
   if(!effect.empty()) {
    play=true;frozen=true;
-   if(effect=="pad") {game.warpPlayer(game.jumpPads()[0].position);for(int i=0;i<24;++i)game.update(1.F/120,{});}
+   if(effect=="gate-closed"||effect=="gate-opening"||effect=="gate-open"||effect=="gate") {
+    // Trigger the actual pickup path. No direct writes to inventory or gate state.
+    if(effect!="gate-closed") {
+     const auto cores=game.cores();
+     for(const auto& core:cores) {
+      for(int i=0;i<120&&game.player().interactionTime>0;++i)game.update(1.F/120,{});
+      game.warpPlayer(core.position-glm::vec3(0,.8F,0));
+      relay::Input use;use.interactPressed=true;game.update(1.F/120,use);
+      for(int i=0;i<120&&!game.gateUnlocked()&&game.nearestCore()>=0;++i)game.update(1.F/120,{});
+     }
+     if(!game.gateUnlocked())throw std::runtime_error("Gate demonstration could not collect all cores");
+    }
+    game.warpPlayer(game.gatePosition()+glm::vec3(0,0,4));
+    const int steps=effect=="gate-opening"?36:effect=="gate-open"?120:0;
+    for(int i=0;i<steps;++i)game.update(1.F/120,{});
+    if(effect=="gate")frozen=false;
+   }
+   else if(effect=="pad") {game.warpPlayer(game.jumpPads()[0].position);for(int i=0;i<24;++i)game.update(1.F/120,{});}
    else if(effect=="core") {game.warpPlayer(game.cores()[0].position+glm::vec3(0,-.8F,1));relay::Input use;use.interactPressed=true;game.update(.01F,use);for(int i=0;i<46;++i)game.update(1.F/120,{});}
    else if(effect=="impact") {for(int i=0;i<492;++i)game.update(1.F/120,{});const auto& trap=game.traps()[0];game.warpPlayer({trap.area.min.x+.6F,trap.area.min.y,trap.area.min.z+.6F});for(int i=0;i<10;++i)game.update(1.F/120,{});}
    else if(effect=="run") {relay::Input dash;dash.movement={0,-1};dash.sprintHeld=true;for(int i=0;i<70;++i)game.update(1.F/120,dash);}
@@ -59,7 +76,7 @@ int main(int argc,char** argv) {
     for(int k=0;k<12&&game.state()==relay::RunState::Playing;++k){for(int i=0;i<140;++i)game.update(1.F/120,{});while(game.trapPhase(0)!=relay::TrapPhase::Active)game.update(1.F/120,{});game.warpPlayer({trap.area.min.x+.6F,trap.area.min.y,trap.area.min.z+.6F});game.update(1.F/120,{});}
     for(int i=0;i<150;++i)game.update(1.F/120,{});
    }
-   else throw std::runtime_error("Effect must be pad, core, impact, run, land or reboot");
+   else throw std::runtime_error("Effect must be pad, core, impact, run, land, reboot, gate, gate-closed, gate-opening or gate-open");
   }
   // Capture helpers: --warp x y z puts the courier there, --face turns the view (degrees).
   if(warp.x>=0){game.warpPlayer(warp);for(int i=0;i<12;++i)game.update(1.F/120,{});}

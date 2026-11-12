@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/lite_tests.dir/link.d CMakeFiles/lite_tests.dir/lite_tests.cpp.o -o lite_tests  ../src/libcraft_core.a ../_deps/glm-build/glm/libglm.a ../_deps/glfw-build/src/libglfw3.a /usr/lib/x86_64-linux-gnu/librt.a -lm /usr/lib/x86_64-linux-gnu/libX11.so ../libcraft_glad_gl_core_33.a -ldl

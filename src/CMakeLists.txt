@@ -99,6 +99,7 @@ add_custom_target(craft_runtime_assets
 add_dependencies(Craft craft_runtime_assets)
 
 # Optional local authoring tools; source distributions work without this directory.
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/editor/CMakeLists.txt")
+option(BUILD_LITE_EDITOR "Build the local-only map authoring tool" OFF)
+if(BUILD_LITE_EDITOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/editor/CMakeLists.txt")
     add_subdirectory(editor)
 endif()

@@ -1,4 +1,5 @@
 #include "graphics/RelayModels.h"
+#include "core/ExitGate.h"
 
 #include <cmath>
 #include <algorithm>
@@ -222,20 +223,53 @@ SceneModels::SceneModels() {
   robot_.scale=Game::modelScale;
   bindPose_=robot_.nodes;
 
-  auto gatePart = [&](const char* name, int parent, glm::vec3 p, glm::vec3 size, glm::vec3 colour, float glow = 0) {
+  auto gatePart = [&](const std::string& name, int parent, glm::vec3 p, glm::vec3 size, glm::vec3 colour, float glow = 0) {
     return gate_.add({name, parent, p, {}, size, colour, glow, true});
   };
   int frame = gate_.add({"gate_root", -1, {}, {}, {1, 1, 1}, shell, 0, false});
-  gatePart("left_post", frame, {-1.5F, 1.5F, 0}, {.4F, 3, .5F}, shell);
-  gatePart("right_post", frame, {1.5F, 1.5F, 0}, {.4F, 3, .5F}, shell);
-  gatePart("lintel", frame, {0, 3, 0}, {3.4F, .4F, .5F}, dark);
-  lamp_ = gatePart("status_lamp", frame, {0, 3.02F, .28F}, {1.1F, .12F, .05F}, amber, .7F);
-  doorL_ = gatePart("left_panel", frame, {-.65F, 1.35F, 0}, {1.28F, 2.7F, .26F}, shell);
-  doorR_ = gatePart("right_panel", frame, {.65F, 1.35F, 0}, {1.28F, 2.7F, .26F}, shell);
+  gatePart("left_post", frame, ExitGate::postCentre(-1), ExitGate::postSize(), shell);
+  gatePart("right_post", frame, ExitGate::postCentre(1), ExitGate::postSize(), shell);
+  gatePart("lintel", frame, {0,3,0}, {4,.4F,.6F}, shell);
+  gatePart("top_rail", frame, {0,2.74F,0}, {6.4F,.10F,.36F}, dark);
+  lamp_ = gatePart("status_lamp", frame, {0,3,.32F}, {1.2F,.16F,.06F}, amber, .45F);
+  doorL_ = gatePart("left_panel", frame, ExitGate::panelCentre(-1,0), ExitGate::panelSize(), {.35F,.43F,.48F});
+  doorR_ = gatePart("right_panel", frame, ExitGate::panelCentre(1,0), ExitGate::panelSize(), {.35F,.43F,.48F});
+  int sideIndex=0;
   for (int panel : {doorL_, doorR_}) {
-    gatePart(panel == doorL_ ? "left_panel_stripe" : "right_panel_stripe", panel, {0, .4F, .15F}, {.85F, .08F, .04F}, shell);
-    gatePart(panel == doorL_ ? "left_panel_handle" : "right_panel_handle", panel, {panel == doorL_ ? .42F : -.42F, -.05F, .17F}, {.07F, .46F, .09F}, dark);
+    const bool left=panel==doorL_;
+    gateStripes_[sideIndex++]=gatePart(left?"left_panel_stripe":"right_panel_stripe",panel,{0,.48F,.215F},{1.42F,.12F,.035F},teal,.12F);
+    gatePart(left?"left_panel_inset":"right_panel_inset",panel,{0,-.4F,.205F},{1.12F,.75F,.025F},shell);
+    const int handle=gatePart(left?"left_panel_handle":"right_panel_handle",panel,{left?.56F:-.56F,0,.25F},{.09F,.48F,.10F},dark);
+    if(left)latchL_=handle;else latchR_=handle;
+    gatePart(left?"left_handle_grip":"right_handle_grip",handle,{0,.15F,.065F},{.22F,.07F,.06F},shell);
   }
+  for(int i=0;i<5;++i) {
+    gateIndicators_[i]=gatePart("opening_indicator_"+std::to_string(i),frame,{(i-2)*.23F,2.86F,.33F},{.16F,.045F,.025F},dark);
+  }
+}
+
+void SceneModels::poseGate(float openness,bool unlocked) {
+  const float open=std::clamp(openness,0.F,1.F);
+  gate_.nodes[doorL_].offset=ExitGate::panelCentre(-1,open);
+  gate_.nodes[doorR_].offset=ExitGate::panelCentre(1,open);
+  // Handle rotation is local to each panel; its grip inherits a third joint level.
+  const float release=ExitGate::openness(std::min(open*5.F,1.F));
+  gate_.nodes[latchL_].rotation.z=-.6F*release;
+  gate_.nodes[latchR_].rotation.z=.6F*release;
+  const auto colour=unlocked?glm::vec3(.25F,.8F,.6F):amber;
+  gate_.nodes[lamp_].colour=colour;
+  for(const int stripe:gateStripes_)gate_.nodes[stripe].colour=unlocked?teal:glm::vec3(.32F,.28F,.16F);
+  for(int i=0;i<5;++i) {
+    auto& light=gate_.nodes[gateIndicators_[i]];
+    const bool on=unlocked&&open>=float(i+1)/5.F-.001F;
+    light.colour=on?colour:dark;light.emission=on?.4F:0;
+  }
+}
+
+void SceneModels::appendGate(glm::vec3 position,float openness,bool unlocked,std::vector<Instance>& out) {
+  poseGate(openness,unlocked);
+  gate_.append(glm::translate(glm::mat4(1),position),out);
+  appendBox(out,position+glm::vec3(0,.015F,-.9F),{3,.03F,1.3F},unlocked?glm::vec3(.25F,.8F,.6F):amber);
 }
 
 
@@ -507,15 +541,7 @@ void SceneModels::append(const Game& game,std::vector<Instance>& out,float) {
   out.back().material.w=6.F;
   if(pad.pulse>0)appendGlow(out,pad.position+glm::vec3(0,.1F,0),{1.8F,.16F,1.8F},mint,.18F*pad.pulse,.4F);
  }
- const auto g=game.gatePosition();
- const glm::vec3 lamp=game.gateUnlocked()?glm::vec3(.3F,.7F,.4F):glm::vec3(.8F,.35F,.25F);
- for(float side:{-1.F,1.F}) {
-  appendBox(out,g+glm::vec3(side*1.8F,1.5F,0),{.4F,3,.6F},{.88F,.88F,.83F});
-  appendBox(out,g+glm::vec3(side*(.8F+game.gateOpen()*1.6F),1.4F,0),{1.6F,2.8F,.4F},{.35F,.43F,.48F},0,1);
- }
- appendBox(out,g+glm::vec3(0,3,0),{4,.4F,.6F},{.88F,.88F,.83F});
- appendBox(out,g+glm::vec3(0,3,.32F),{1.2F,.16F,.06F},lamp,.8F);
- appendBox(out,g+glm::vec3(0,.015F,-.9F),{3,.03F,1.3F},lamp);
+ appendGate(game.gatePosition(),game.gateOpen(),game.gateUnlocked(),out);
  for(const auto& sw:game.switches()) appendSwitch(sw.position,game.trapPhase(sw.trap)==TrapPhase::Disabled,sw.animation,out);
  for(std::size_t i=0;i<game.traps().size();++i) appendTrapPlate(game.traps()[i],game.trapPhase(i),game.elapsed(),int(i),out);
  for(const auto& plate:game.plates()) appendPlate(plate,game.doors()[std::size_t(plate.door)].hold,game.elapsed(),out);

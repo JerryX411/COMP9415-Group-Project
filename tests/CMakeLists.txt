@@ -17,3 +17,7 @@ add_test(NAME surveillance_camera COMMAND surveillance_tests)
 add_executable(helios_tests helios_tests.cpp)
 target_link_libraries(helios_tests PRIVATE craft_core)
 add_test(NAME helios_four_core_route COMMAND helios_tests)
+
+add_executable(gate_tests gate_tests.cpp)
+target_link_libraries(gate_tests PRIVATE craft_core)
+add_test(NAME gate_hierarchy COMMAND gate_tests)

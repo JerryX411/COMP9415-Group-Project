@@ -24,3 +24,11 @@ RelayEditor.exe
 
 # Local render captures, not runtime game assets.
 /output/
+
+# Local build/distribution dependencies are not assessment source files.
+/vendor/
+/toolchain/
+/Playable/
+/build-backup-*/
+/.temp/
+/build-cse/

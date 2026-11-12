@@ -1,2 +1,0 @@
-/usr/bin/ar qc libcraft_glad_gl_core_33.a CMakeFiles/craft_glad_gl_core_33.dir/gladsources/craft_glad_gl_core_33/src/gl.c.o
-/usr/bin/ranlib libcraft_glad_gl_core_33.a

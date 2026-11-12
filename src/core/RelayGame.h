@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include "core/CourierMotion.h"
 #include "core/LevelData.h"
+#include "core/ExitGate.h"
 
 
 namespace relay {
@@ -246,7 +247,7 @@ class Game {
  TrapPhase trapPhase(std::size_t index) const; float trapPhaseRemaining(std::size_t index) const;
  int nearestCore() const;
  glm::vec3 gatePosition() const{return gate_;}
- float gateOpen() const{return gateOpen_;}
+ float gateOpen() const{return ExitGate::openness(gateProgress_);}
  const char* tutorialHint() const;
  int nearestSwitch() const; int nearestPortal() const; glm::vec3 portalEnd(int code) const; Interaction availableInteraction() const;
  float shadowHeight() const; const char* levelName() const{return nameOf(level_);} static const char* nameOf(int level);
@@ -302,7 +303,7 @@ class Game {
  bool respawnPending_=false;
  glm::vec3 respawn_{8,1,25};
  std::vector<PressurePlate> plates_;
- float elapsed_=0,remaining_=0,gateOpen_=0,hitStop_=0,messageTime_=0;
+ float elapsed_=0,remaining_=0,gateProgress_=0,hitStop_=0,messageTime_=0;
  std::string message_;
  std::vector<FloorTrap> traps_; std::vector<RelaySwitch> switches_; std::vector<MovingHazard> movers_;
  std::vector<JumpPad> jumpPads_;

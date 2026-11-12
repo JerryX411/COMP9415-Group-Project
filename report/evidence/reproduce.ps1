@@ -1,9 +1,14 @@
 param(
-    [string]$Executable = 'E:\CodexWorkspace\.cache\temp\lite-fixed-camera-build-20261110\CoreExplorerLite.exe',
-    [string]$Destination = 'E:\CodexWorkspace\.cache\temp\lite-report-reproduction'
+    [string]$Executable = '',
+    [string]$Destination = ''
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+if (-not $Executable) {
+    $Executable = Join-Path $projectRoot 'build/CoreExplorerLite.exe'
+    if (-not (Test-Path -LiteralPath $Executable)) { $Executable = Join-Path $projectRoot 'build/Release/CoreExplorerLite.exe' }
+}
+if (-not $Destination) { $Destination = Join-Path $projectRoot 'output/report-reproduction' }
 $resolvedExecutable = (Resolve-Path -LiteralPath $Executable).Path
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 $resolvedDestination = (Resolve-Path -LiteralPath $Destination).Path
@@ -14,7 +19,7 @@ try {
         & $resolvedExecutable --benchmark --level $i --benchmark-output (Join-Path $resolvedDestination ($levels[$i] + '.csv'))
         if ($LASTEXITCODE -ne 0) { throw "Benchmark failed: $($levels[$i])" }
     }
-    foreach ($eventName in @('core', 'impact', 'pad', 'run')) {
+    foreach ($eventName in @('core', 'impact', 'pad', 'run', 'gate-closed', 'gate-opening', 'gate-open')) {
         & $resolvedExecutable --effect $eventName --frames 2 --capture (Join-Path $resolvedDestination ($eventName + '.png'))
         if ($LASTEXITCODE -ne 0) { throw "Capture failed: $eventName" }
     }

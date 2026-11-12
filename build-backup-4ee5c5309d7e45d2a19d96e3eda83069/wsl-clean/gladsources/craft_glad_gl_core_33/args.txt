@@ -1,1 +1,0 @@
---out-path /mnt/c/Users/yulia/Documents/GitHub/COMP9415-Group-Project/build/wsl-clean/gladsources/craft_glad_gl_core_33 --api gl:core=3.3 --reproducible c

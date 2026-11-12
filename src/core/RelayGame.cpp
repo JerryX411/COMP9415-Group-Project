@@ -218,7 +218,7 @@ Game::Game() { reset(0); }
 void Game::reset(int level) {
  level_=std::clamp(level,0,levelCount-1); ++revision_; state_=RunState::Playing;
  liftTrail_=liftTick_=0;
- elapsed_=0; timeLimit_=challengeTimeLimit; gateOpen_=0; crouchToggle_=false; hitStop_=0;
+ elapsed_=0; timeLimit_=challengeTimeLimit; gateProgress_=0; crouchToggle_=false; hitStop_=0;
  player_=Player{}; spawn_={8,1,25}; gate_={32,1,7}; player_.position=spawn_; player_.motion.spawnAge=10; footStep_=0;
  doors_.clear(); plates_.clear(); portals_.clear(); portalWait_=0; portalHold_=-1; teleports_=0;
  falls_=0; checkpoints_.clear(); respawn_=spawn_; lives_=livesPerLevel; respawnPending_=false;
@@ -301,10 +301,10 @@ const std::vector<Bounds>& Game::fixtures() const {
  for(const auto& sw:switches_) fixtures_.push_back({sw.position+glm::vec3(-.375F,0,-.325F),sw.position+glm::vec3(.375F,1.05F,.325F)});
  const auto g=gatePosition();
  for(float side:{-1.F,1.F}) {
-  const auto post=g+glm::vec3(side*1.8F,1.5F,0);
-  fixtures_.push_back({post-glm::vec3(.2F,1.5F,.3F),post+glm::vec3(.2F,1.5F,.3F)});
-  const auto door=g+glm::vec3(side*(.8F+gateOpen_*1.6F),1.4F,0);
-  fixtures_.push_back({door-glm::vec3(.8F,1.4F,.2F),door+glm::vec3(.8F,1.4F,.2F)});
+  const auto post=g+ExitGate::postCentre(side),postHalf=ExitGate::postSize()*.5F;
+  fixtures_.push_back({post-postHalf,post+postHalf});
+  const auto door=g+ExitGate::panelCentre(side,gateOpen()),doorHalf=ExitGate::panelSize()*.5F;
+  fixtures_.push_back({door-doorHalf,door+doorHalf});
  }
  fixtures_.push_back({g+glm::vec3(-2,2.8F,-.3F),g+glm::vec3(2,3.2F,.3F)});
  return fixtures_;
@@ -613,7 +613,7 @@ void Game::step(float dt,const Input& input) {
  for(auto& sw:switches_) sw.animation=std::max(0.F,sw.animation-3*dt);
  updateMovers(dt); if(state_!=RunState::Playing) return;
  updateInteraction(dt,input.interactPressed);
- if(gateUnlocked())gateOpen_=std::min(1.F,gateOpen_+dt*1.5F);
+ if(gateUnlocked())gateProgress_=std::min(1.F,gateProgress_+dt/ExitGate::openingSeconds);
  const auto previous=player_.position;
  if(input.crouchPressed) crouchToggle_=!crouchToggle_;
  if(crouchToggle_||input.crouchHeld) player_.crouching=true;
@@ -668,7 +668,7 @@ void Game::step(float dt,const Input& input) {
  for(std::size_t i=0;i<traps_.size();++i) if(trapPhase(i)==TrapPhase::Active&&traps_[i].touchesFeet(player_.position,footRadius)) applyDamage((traps_[i].area.min+traps_[i].area.max)*.5F,int(i),true,DamageKind::Electric);
  updateDoors(dt); updatePortals(dt); updateCheckpoints(dt);
  if(player_.position.y<-5) { state_=RunState::Lost; player_.health=0; }
- if(state_==RunState::Playing&&gateUnlocked()&&gateOpen_>.98F&&std::abs(player_.position.x-gatePosition().x)<1.1F&&player_.position.z<gatePosition().z-.35F&&player_.position.z>gatePosition().z-1.8F&&player_.position.y<1.5F) {
+ if(state_==RunState::Playing&&gateUnlocked()&&gateOpen()>.98F&&std::abs(player_.position.x-gatePosition().x)<1.1F&&player_.position.z<gatePosition().z-.35F&&player_.position.z>gatePosition().z-1.8F&&player_.position.y<1.5F) {
   state_=RunState::Won;player_.velocity={0,0,0};player_.locomotion={0,0};player_.moveBlend=0;player_.interaction=Interaction::None;
  }
  updateAnimation(dt,previous,turn);
