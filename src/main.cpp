@@ -116,9 +116,7 @@ int main(int argc,char** argv) {
    }
    if(focused&&screen==Screen::Play) {
     if(game.state()==relay::RunState::Playing&&keys.pressed(GLFW_KEY_M))ui.toggleMinimap();
-    // A toggle needs the queued key-down event, even if a quick tap has already
-    // been released before the next native held-key sample. Repeats stay off.
-    if(ImGui::IsKeyPressed(ImGuiKey_V,false))camera.setSurveillance(!camera.surveillance(),game);
+    if(keys.pressed(GLFW_KEY_V))camera.setSurveillance(!camera.surveillance(),game);
     if(keys.pressed(GLFW_KEY_F1))options.diagnostics=!options.diagnostics;
     if(keys.pressed(GLFW_KEY_F2)){options.normalMapping=!options.normalMapping;options.normalCompare=false;}
     if(keys.pressed(GLFW_KEY_F3))options.normalCompare=!options.normalCompare;

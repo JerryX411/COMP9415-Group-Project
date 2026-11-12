@@ -1,5 +1,6 @@
 #include "graphics/GameInput.h"
 #include "core/KeyBindings.h"
+#include <unordered_map>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #ifdef _WIN32
@@ -13,6 +14,9 @@
 #include <GLFW/glfw3native.h>
 #endif
 namespace relay {
+namespace {
+std::unordered_map<GLFWwindow*,GameInput*> inputs;
+}
 #ifdef _WIN32
 namespace {
 // GLFW key code to Windows virtual key; letters, digits and space already agree.
@@ -39,11 +43,26 @@ int virtualKey(int key) {
 }
 #endif
 GameInput::GameInput(GLFWwindow* window):window_(window) {
+  inputs[window]=this;
+  previousKeyCallback_=glfwSetKeyCallback(window,keyEvent);
 #ifdef _WIN32
   handle_=glfwGetWin32Window(window);
 #endif
 }
-GameInput::~GameInput() { suppressIme(false); }
+GameInput::~GameInput() {
+  suppressIme(false);
+  glfwSetKeyCallback(window_,previousKeyCallback_);
+  inputs.erase(window_);
+}
+void GameInput::keyEvent(GLFWwindow* window,int key,int scancode,int action,int mods) {
+  const auto found=inputs.find(window);
+  if(found==inputs.end())return;
+  auto& input=*found->second;
+  // Preserve short taps even when PRESS and RELEASE arrive in the same poll.
+  // GLFW repeats are ignored; held movement still comes from the native sample.
+  if(action==GLFW_PRESS&&key>=0&&key<int(input.pressEvents_.size()))input.pressEvents_[unsigned(key)]=true;
+  if(input.previousKeyCallback_)input.previousKeyCallback_(window,key,scancode,action,mods);
+}
 void GameInput::suppressIme(bool suppress) {
 #ifdef _WIN32
   if(suppress==suppressed_) return;
@@ -61,6 +80,7 @@ void GameInput::suppressIme(bool suppress) {
 #endif
 }
 void GameInput::prepare(bool textInputWanted) {
+  pressEvents_={};
   // No layout changes, global keyboard hooks, or background keyboard polling.
   suppressIme(glfwGetWindowAttrib(window_,GLFW_FOCUSED)&&!textInputWanted);
 }
@@ -80,7 +100,7 @@ void GameInput::poll() {
 #endif
     }
   }
-  buttons_.update(sample,focused);
+  buttons_.update(sample,focused,pressEvents_);
   if(!focused) suppressIme(false);
 }
 bool GameInput::nativeSelfTest() {

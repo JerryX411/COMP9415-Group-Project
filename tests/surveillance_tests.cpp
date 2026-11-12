@@ -1,5 +1,6 @@
 #include "core/FollowCamera.h"
 #include "core/KeyBindings.h"
+#include "core/ButtonState.h"
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -32,6 +33,17 @@ void tick(relay::Game& game,relay::FollowCamera& camera,int count,relay::Input i
 }
 }
 int main() { try {
+  relay::ButtonState buttons;
+  relay::ButtonState::Snapshot empty{},tap{};tap['C']=true;
+  buttons.update(empty,true);
+  buttons.update(empty,true,tap);
+  check(buttons.pressed('C')&&!buttons.held('C'),"A tap released between frames must still toggle without leaving movement held");
+  buttons.update(empty,true);
+  check(!buttons.pressed('C'),"A queued tap is consumed once");
+  buttons.update(tap,true,tap);buttons.update(tap,true);
+  check(buttons.held('C')&&!buttons.pressed('C'),"Holding a key cannot repeatedly toggle crouch");
+  buttons.update(empty,false,tap);buttons.update(empty,true,tap);
+  check(!buttons.pressed('C')&&!buttons.held('C'),"Focus changes discard stale events");
   relay::Game game; relay::FollowCamera camera;
   for(int level=0;level<relay::Game::levelCount;++level) {
     game.reset(level); camera.reset(game);

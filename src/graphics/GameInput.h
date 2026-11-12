@@ -16,6 +16,9 @@ class GameInput {
   bool nativeSelfTest();
  private:
   void suppressIme(bool suppress);
+  static void keyEvent(GLFWwindow* window,int key,int scancode,int action,int mods);
+  void (*previousKeyCallback_)(GLFWwindow*,int,int,int,int)=nullptr;
+  ButtonState::Snapshot pressEvents_{};
   GLFWwindow* window_;
   ButtonState buttons_;
   void* handle_=nullptr;
