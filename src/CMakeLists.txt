@@ -84,13 +84,19 @@ set_target_properties(Craft PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}
 )
 
-# Running from the build directory should work without source-tree paths.
-add_custom_command(TARGET Craft POST_BUILD
+# Refresh runtime assets even when an asset-only edit does not relink the game.
+get_property(CRAFT_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+set(CRAFT_RUNTIME_ASSETS "${PROJECT_BINARY_DIR}/assets")
+if(CRAFT_MULTI_CONFIG)
+    set(CRAFT_RUNTIME_ASSETS "${PROJECT_BINARY_DIR}/$<CONFIG>/assets")
+endif()
+add_custom_target(craft_runtime_assets
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${PROJECT_SOURCE_DIR}/assets"
-            "$<TARGET_FILE_DIR:Craft>/assets"
+            "${PROJECT_SOURCE_DIR}/assets" "${CRAFT_RUNTIME_ASSETS}"
     COMMENT "Copying runtime assets"
+    VERBATIM
 )
+add_dependencies(Craft craft_runtime_assets)
 
 # Optional local authoring tools; source distributions work without this directory.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/editor/CMakeLists.txt")

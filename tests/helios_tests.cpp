@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <queue>
 #include <sstream>
 #include <stdexcept>
@@ -81,31 +82,47 @@ struct Runner {
     std::vector<glm::vec3> compact;
     for(const auto p:result){while(compact.size()>1){const auto a=compact.back()-compact[compact.size()-2],b=p-compact.back();if(std::abs(a.y)>.01F||std::abs(b.y)>.01F||glm::length(glm::cross(a,b))>.01F||glm::dot(a,b)<=0)break;compact.pop_back();}compact.push_back(p);}return compact;
   }
-  void walk(const std::vector<glm::vec3>& route) {
+  void walk(const std::vector<glm::vec3>& route, bool hopGaps=false, std::optional<float> firstTakeoffX={}) {
     for(const auto target:route) {
       float best=1e9F;int stalled=0;
+      bool jumped=false,arrived=false;
       for(int i=0;i<120*8;++i) {
         const auto p=g.player().position;const glm::vec2 delta(target.x-p.x,target.z-p.z);const float d=glm::length(delta);
-        if(d<.15F&&std::abs(p.y-target.y)<.16F&&g.player().grounded)break;
+        if(d<.15F&&std::abs(p.y-target.y)<.16F&&g.player().grounded){arrived=true;break;}
         const auto dir=delta/std::max(d,.001F);relay::Input in;
         in.movement=dir*std::min(1.F,d*3.F);in.jumpHeld=true;
         const auto ahead=p+glm::vec3(dir.x*.85F,0,dir.y*.85F);
         in.crouchHeld=!clear(p,relay::Game::playerHeight)||!clear(target,relay::Game::playerHeight)||(clear(ahead,relay::Game::crouchHeight)&&!clear(ahead,relay::Game::playerHeight));
-        in.jumpPressed=!in.crouchHeld&&g.player().grounded&&(target.y>p.y+.35F||(!clear(ahead,relay::Game::playerHeight)&&clear(ahead+glm::vec3(0,1,0),relay::Game::playerHeight)));
+        const bool atLip=hopGaps&&!g.world().cell(int(p.x),int(std::round(p.y))-1,int(p.z));
+        const bool stepsUp=target.y>p.y+.35F||
+          (!clear(ahead,relay::Game::playerHeight)&&clear(ahead+glm::vec3(0,1,0),relay::Game::playerHeight));
+        in.sprintHeld=hopGaps&&d>1.F;
+        // The first roof gap starts at a low opening. Take off after clearing
+        // its lintel, while the game's coyote-time window is still open.
+        const bool jump=firstTakeoffX
+          ? !jumped&&p.x<=*firstTakeoffX&&g.player().coyoteTime>0
+          : g.player().grounded&&(atLip||stepsUp);
+        in.jumpPressed=!in.crouchHeld&&jump;
+        jumped=jumped||in.jumpPressed;
         tick(in);
         const float dist=d+std::abs(p.y-target.y);
         if(dist<best-.015F){best=dist;stalled=0;}else if(++stalled>240)throw std::runtime_error("Stuck approaching "+std::to_string(target.x)+","+std::to_string(target.y)+","+std::to_string(target.z)+where());
       }
+      if(!arrived)throw std::runtime_error("Waypoint timed out"+where());
+      firstTakeoffX.reset();
     }
     idle(.12F);
   }
   bool go(glm::vec3 target) {auto route=path(target);if(route.empty()&&glm::distance(target,g.player().position)>.4F)return false;walk(route);return true;}
   void collect(int i) {
-    auto target=g.cores()[i].position-glm::vec3(0,.8F,0);
+    auto target=g.cores().at(i).position-glm::vec3(0,.8F,0);
     if(!go(target))throw std::runtime_error("No route to core "+std::to_string(i)+where());
+    pickUp(i);
+  }
+  void pickUp(int i) {
     if(g.nearestCore()!=i)throw std::runtime_error("Core out of reach"+where());
     relay::Input in;in.interactPressed=true;tick(in);idle(.5F);
-    if(!g.cores()[i].collected)throw std::runtime_error("Core pickup failed"+where());
+    if(!g.cores().at(i).collected)throw std::runtime_error("Core pickup failed"+where());
     if(g.gateUnlocked()!=(g.collectedCount()==4))throw std::runtime_error("Exit must require exactly four cores");
     std::cout<<"Collected core "<<i<<where()<<std::endl;
   }
@@ -115,30 +132,34 @@ int main(int argc,char** argv) {
   try {
     Runner bot(argc>1?argv[1]:nullptr);
     if(bot.g.cores().size()!=4||bot.g.room().max.z!=64)throw std::runtime_error("Wrong yard layout");
-    for(std::size_t i=0;i<bot.g.cores().size();++i){const auto p=bot.g.cores()[i].position;std::cout<<"Core "<<i<<" at "<<p.x<<','<<p.y<<','<<p.z<<'\n';}
-    // Start with the western lower district, then clockwise through the four
-    // surviving districts. Reach plates via the same navigation as the robot.
-    if(!bot.go(bot.g.plates()[0].position))throw std::runtime_error("West entry plate inaccessible");bot.idle(.5F);
-    if(!bot.go(bot.g.plates()[4].position))throw std::runtime_error("West inner plate inaccessible");bot.idle(.5F);
+    for(std::size_t i=0;i<bot.g.cores().size();++i){const auto p=bot.g.cores().at(i).position;std::cout<<"Core "<<i<<" at "<<p.x<<','<<p.y<<','<<p.z<<'\n';}
+    if(bot.g.plates().size()!=4||bot.g.doors().size()!=4)
+      throw std::runtime_error("Wrong Helios door and plate count");
+    const auto openDoor=[&](std::size_t index) {
+      const auto& plate=bot.g.plates().at(index);
+      if(!bot.go(plate.position))
+        throw std::runtime_error("Cannot reach plate "+std::to_string(index)+bot.where());
+      bot.idle(.5F);
+      if(!bot.g.doors().at(std::size_t(plate.door)).unlocked)
+        throw std::runtime_error("Plate "+std::to_string(index)+" did not unlock its door"+bot.where());
+      std::cout<<"Opened door "<<plate.door<<bot.where()<<std::endl;
+    };
+    openDoor(3);
+    openDoor(0);
     bot.collect(2);
-    bot.collect(3);
-    if(!bot.go(bot.g.plates()[1].position))throw std::runtime_error("Shock room plate inaccessible");bot.idle(.5F);
+    if(!bot.go({34.5F,4,23.F}))throw std::runtime_error("Northwest platform inaccessible"+bot.where());
+    // Traverse the raised stones and collect from the ledge beside the core.
+    bot.walk({{29.5F,4,23.F},{25.5F,4,23.5F},{21.5F,4,23.5F},{17.5F,4,23.5F},
+              {17.5F,4,19.5F},{19.5F,4,17.5F},{19.5F,4,16.8F}},true,32.22F);
+    bot.pickUp(3);
+    bot.walk({{19.5F,1,19.5F}});
+    openDoor(1);
     bot.collect(1);
-    if(!bot.go(bot.g.plates()[2].position))throw std::runtime_error("East entry plate inaccessible");bot.idle(.5F);
+    openDoor(2);
     bot.collect(0);
-    if(!bot.go(bot.g.plates()[3].position))throw std::runtime_error("Exit plate inaccessible");
-    bot.idle(.5F);
     if(!bot.go({46,1,8}))throw std::runtime_error("Exit corridor inaccessible");
     for(int n=0;n<120*3&&bot.g.state()!=relay::RunState::Won;++n){relay::Input in;in.movement={0,-1};bot.tick(in);}
     if(bot.g.state()!=relay::RunState::Won||bot.g.collectedCount()!=4)throw std::runtime_error("Four-core finish failed"+bot.where());
     std::cout<<"Helios Yard full input run: "<<bot.g.elapsed()<<" seconds; cores=4/4; damage="<<bot.damage<<"; falls="<<bot.g.falls()<<"; state=Won; frames="<<bot.steps<<'\n';
-    Runner shortcut(nullptr);
-    if(!shortcut.go(shortcut.g.plates()[2].position))throw std::runtime_error("East shortcut entry inaccessible");
-    shortcut.idle(.5F);
-    if(!shortcut.go(shortcut.g.plates()[5].position))throw std::runtime_error("Relocated upper plate inaccessible");
-    shortcut.idle(.5F);
-    if(!shortcut.g.doors()[3].unlocked||!shortcut.go({87,6,32.5F}))throw std::runtime_error("Retained upper door cannot be traversed");
-    std::cout<<"Elevated east shortcut: reached relocated plate and walked through retained door\n";
   } catch(const std::exception& e){std::cerr<<"FAIL helios: "<<e.what()<<'\n';return 1;}
 }
-

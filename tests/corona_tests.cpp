@@ -1,6 +1,6 @@
 // Corona Run (Lite level 3): structure checks and a full run with ordinary controls, side branches
 // (jump pad perch, stepping stones, the long beam, the loop) included.
-// The route (tests/corona_route.txt) is written by tools/generate_corona_run.py alongside the map.
+// The route in tests/corona_route.txt follows the authored Lite map.
 // The bot only presses keys: it runs, sprints, crouches and jumps at lips and steps on its own, and
 // waits for shock strips and sweeping blocks the way a careful player would. It must finish the
 // run without falling into the void, inside the time limit.
@@ -9,9 +9,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -48,7 +50,8 @@ struct Bot {
     const float ax = p.position.x + dir.x * .95F, az = p.position.z + dir.y * .95F;
     return solid(ax, fy, az) && !solid(ax, fy + 1, az) && !solid(ax, fy + 2, az);
   }
-  void go(glm::vec2 target, char mode) {
+  void go(glm::vec2 target, char mode, std::optional<float> takeoffZ = {}) {
+    bool jumpRequested = false;
     float best = 1e9F; int stall = 0;
     for (int i = 0; i < 120 * 30; ++i) {
       const auto p = g.player().position;
@@ -61,7 +64,11 @@ struct Bot {
       in.sprintHeld = mode == 's' && distance > 1.2F;
       in.crouchHeld = mode == 'c';
       in.jumpHeld = mode != 'c';
-      in.jumpPressed = mode != 'c' && wantsJump(dir);
+      // For the low beam, delay the jump until just past the lip. The normal
+      // coyote-time window lets the courier take off without hitting the beam early.
+      in.jumpPressed = takeoffZ ? !jumpRequested && p.z <= *takeoffZ
+                                : mode != 'c' && wantsJump(dir);
+      jumpRequested = jumpRequested || in.jumpPressed;
       tick(in);
       if (distance < best - .02F) { best = distance; stall = 0; } else if (++stall > 360) break;
     }
@@ -80,7 +87,7 @@ struct Bot {
   // A sweeper crossing the path: wait until it stays clear of the path's centre line (on the
   // axis it moves along) for the crossing.
   void waitMover(int j, char axis, float lane, float clearance) {
-    const auto& m = g.movers()[std::size_t(j)];
+    const auto& m = g.movers().at(std::size_t(j));
     for (int n = 0; n < 120 * 20; ++n) {
       bool clear = true;
       for (float tau = 0; tau <= .7F && clear; tau += .02F) {
@@ -95,7 +102,7 @@ struct Bot {
   // A block sliding along the path: wait until it comes toward the courier, then run at it and
   // jump over it. Works along either axis.
   void jumpMover(int j) {
-    const auto& m = g.movers()[std::size_t(j)];
+    const auto& m = g.movers().at(std::size_t(j));
     const glm::vec2 travel(m.end.x - m.start.x, m.end.z - m.start.z);
     const bool alongX = std::abs(travel.x) > std::abs(travel.y);
     const glm::vec2 d = alongX ? glm::vec2(travel.x > 0 ? 1.F : -1.F, 0) : glm::vec2(0, travel.y > 0 ? 1.F : -1.F);
@@ -154,7 +161,7 @@ int main() {
   try {
     relay::Game g; g.reset(relay::Game::runLevel);
     check(g.level() == relay::Game::runLevel && std::string(g.levelName()) == "CORONA RUN", "Corona Run loads as level 3");
-    check(g.cores().size() == 10 && g.checkpoints().size() == 4 && g.traps().size() >= 14 && g.movers().size() >= 8 && g.jumpPads().size() == 4 && g.portals().empty(), "Corona Run pieces");
+    check(g.cores().size() == 9 && g.checkpoints().size() == 7 && g.traps().size() == 15 && g.movers().size() == 5 && g.jumpPads().size() == 4 && g.portals().empty(), "Corona Run pieces");
     check(g.timedLevel() && g.timeRemaining() == 300 && g.wordless(), "Five-minute wordless run");
     check(g.player().position.y > 3.9F, "Spawn stands on the raised start platform");
     // Elevated hazards stand on the lanes, not on the void floor.
@@ -202,7 +209,13 @@ int main() {
       if (line.empty()) continue;
       std::istringstream s(line); std::string op; s >> op; ++step;
       if (std::getenv("CORONA_TRACE")) std::cerr << step << ": " << line << bot.where() << '\n';
-      if (op == "go") { float x, z; char mode = 's'; s >> x >> z >> mode; bot.go({x, z}, mode); }
+      if (op == "go") {
+        float x, z, takeoffZ;
+        char mode;
+        check(bool(s >> x >> z >> mode), "invalid go command: " + line);
+        const std::optional<float> lateJump = s >> takeoffZ ? std::optional<float>(takeoffZ) : std::nullopt;
+        bot.go({x, z}, mode, lateJump);
+      }
       else if (op == "wtrap") { int i; float need; s >> i >> need; bot.waitTrap(i, need); }
       else if (op == "wmover") { int j; char axis; float lane, clearance; s >> j >> axis >> lane >> clearance; bot.waitMover(j, axis, lane, clearance); }
       else if (op == "jmover") { int j; s >> j; bot.jumpMover(j); }
@@ -212,7 +225,7 @@ int main() {
         for (int n = 0; n < 240 && g.state() == relay::RunState::Playing; ++n) { relay::Input in; in.movement = {0, -1}; bot.tick(in); }
       } else throw std::runtime_error("unknown route step " + op);
     }
-    check(g.collectedCount() == 10, "all ten cores");
+    check(g.collectedCount() == int(g.cores().size()), "all cores collected");
     check(g.state() == relay::RunState::Won, "finished the run" + bot.where());
     int active = 0; for (const auto& c : g.checkpoints()) active += c.active;
     check(active == 1, "exactly the last checkpoint holds the respawn point");

@@ -2,6 +2,7 @@
 #include "core/FollowCamera.h"
 #include <cmath>
 #include "graphics/RelayModels.h"
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <stdexcept>
@@ -143,7 +144,7 @@ int main(){try{
  {
   relay::Game y; y.reset(relay::Game::heliosLevel);
   check(y.level()==relay::Game::heliosLevel&&std::string(y.levelName())=="HELIOS YARD","Helios Yard loads as level 2");
-  check(y.cores().size()==4&&y.doors().size()==6&&y.plates().size()==6&&y.traps().size()==48&&y.movers().size()==6&&y.portals().size()==1&&y.jumpPads().size()==1,"Helios Yard: four retained districts and their mechanisms");
+  check(y.cores().size()==4&&y.doors().size()==4&&y.plates().size()==4&&y.traps().size()==48&&y.movers().size()==6&&y.portals().size()==1&&y.jumpPads().size()==1,"Helios Yard: four retained districts and their mechanisms");
  {
   // The big shock floor fires at random: each plate on its own schedule, always warning first, with
   // at least a second of safe floor between shocks; the small plates keep the fixed beat.
@@ -174,16 +175,18 @@ int main(){try{
   // Materials and floor paint arrive in the voxel world.
   int special=0;for(int z=4;z<88;++z)for(int x=4;x<88;++x)for(int h=0;h<12;++h){const auto m=y.world().cell(x,h,z);if(m>=4&&m<=8)++special;}
   check(special>1000,"Guide, beacon, sandstone and slate materials load");
-  // Pressure plates unlock their doors for good, on the ground and on upper floors.
+  // Pressure plates unlock their doors for good, including a ground-level plate linked to a raised door.
   const auto plate=y.plates()[0];const auto& door=y.doors()[std::size_t(plate.door)];
   check(!door.unlocked&&door.open==0,"Door starts sealed");
   y.warpPlayer(plate.position);advance(y,.6F);
   check(y.doors()[std::size_t(plate.door)].unlocked&&y.doors()[std::size_t(plate.door)].open>.99F,"Plate unlocks its door");
   y.warpPlayer(y.spawnPoint());advance(y,30);check(y.doors()[std::size_t(plate.door)].open>.99F,"Door stays open for good");
-  int upper=-1;for(std::size_t i=0;i<y.plates().size();++i)if(y.plates()[i].position.y>1.5F)upper=int(i);
-  check(upper>=0,"An upper-floor plate exists");
-  const auto high=y.plates()[std::size_t(upper)];check(y.doors()[std::size_t(high.door)].centre.y>2.5F,"Its door is on an upper floor");
-  y.warpPlayer(high.position);advance(y,.6F);check(y.doors()[std::size_t(high.door)].unlocked,"Upper plate unlocks its upper door");
+  const auto raised=std::find_if(y.plates().begin(),y.plates().end(),[&](const auto& p){
+   return p.position.y==1.F&&y.doors().at(std::size_t(p.door)).centre.y>2.5F;
+  });
+  check(raised!=y.plates().end(),"A ground plate controls a raised door");
+  y.warpPlayer(raised->position);advance(y,.6F);
+  check(y.doors().at(std::size_t(raised->door)).unlocked,"Ground plate unlocks the raised door");
   // Portals: wake both ends with E, then step in to cross.
   relay::Input use;use.interactPressed=true;
   const auto link=y.portals()[0];

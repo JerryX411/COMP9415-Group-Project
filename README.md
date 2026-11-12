@@ -35,10 +35,10 @@ The HUD shows lives as three little robot heads under the armour cells, in glowi
 
 ## Corona Run (level 3, the second mission, in development)
 
-**Corona Run** comes after Helios Yard: choose **Level 2** on the title screen (or `--level 2`), or press Enter after winning Helios. Helios is an open yard to explore and puzzle through. Corona Run is a long timed parkour path built for challenge (rebuilt and extended on 2026-11-09). Nine main strands wind round a 76 × 76 room twice, climbing from stand height 4 to 12 and back down. Four short side branches with grey-teal floors hold four of the cores. The time limit is 5:00, and ten cores open the exit, so every branch has to be visited. Corona Run is the last level: after the win, the result screen offers only **ENTER MAIN MENU**, which fades back to the title screen (R does nothing there).
+**Corona Run** comes after Helios Yard: choose **Level 2** on the title screen (or `--level 2`), or press Enter after winning Helios. Helios is an open yard to explore and puzzle through. Corona Run is a long timed parkour path built for challenge (rebuilt and extended on 2026-11-09). Nine main strands wind round a 76 × 76 room twice, climbing from stand height 4 to 12 and back down. Three side branches hold four of the cores. Collect all nine cores to unlock the exit within the 5:00 limit. Corona Run is the last level: after the win, the result screen offers only **ENTER MAIN MENU**, which fades back to the title screen (R does nothing there).
 
 - **The void:** under the path is a death floor (floor paint `9`) drawn like the full edition's crimson tiles. It is a near-black red bed of cells, each flickering dark red like a failing light on its own beat, with a slower glow shared across 6 × 6 blocks and a soft wave. The shader draws the cells from the clock. Crimson embers and dark ash drift up from the void near the robot. Landing on it costs one armour cell and returns the robot to the last checkpoint. Losing all five cells costs one of the three lives (see Lives).
-- **Checkpoints:** only four, so a mistake costs a long stretch. They stand at the corners after S2, N2, S4 and S6. Reaching one saves the respawn point; it turns from amber to mint and raises a column of light.
+- **Checkpoints:** seven beacons along the route. Reaching one saves the respawn point; it turns from amber to mint and raises a column of light.
 - **Parkour types:**
   - gaps at walking and sprint distance, including flat six-cell sprint gaps;
   - a six-cell long jump that lands two blocks lower;
@@ -55,39 +55,35 @@ The HUD shows lives as three little robot heads under the armour cells, in glowi
   - a crawl tunnel with a shock floor.
 - **Main path:**
   - **S1** (east, north edge): gaps, a hurdle, a low bar, rising zigzag stones, a shock strip, a five-cell sprint gap and a sweeper.
-  - **S2** (south, east side): junction P.
+  - **S2** (south, east side): a sprint gap under a low beam, then the shock field at junction P.
   - **N1** (west, through the north): the two-pad chain, the zigzag beam, the long jump down, then hurdles and a low bar.
   - **N2** (south, west side): the shocked stones.
-  - **S3** (east, through the middle): a pillar climb, a shocked sky beam crossed by two long sweepers, fork F, a sliding block, a sprint gap and the shocked crawl tunnel.
+  - **S3** (east, through the middle): a pillar climb, a shocked sky beam crossed by a sweeper, fork F, a sprint gap and the shocked crawl tunnel.
   - **S4** (south, east side): a descent over dropping zigzag stones.
   - **S5** (west, along the south): a rolling shock wave, a sweeper, junction J, then the main stretch or the B5 loop to junction K, then hurdles and a low bar.
-  - **S6** (south, west side): a sliding block, a sprint gap and a shock strip.
+  - **S6** (south, west side): a sprint gap and a shock strip.
   - **S7** (east, south edge): the jump pad onto the wall top, a sweeper, a flat six-cell sprint gap, a sliding block and a shock strip. Then cross the court's west wall and drop into the exit court.
 - **Side branches** (one or two cores each):
   - **B1:** a jump pad on the inner edge of S1 lifts you to a perch. The centre line misses the pad, so step on it deliberately. Drop back down.
-  - **B2:** 1 × 1 stones climb east from junction P to a tall perch. Hop back the same way.
   - **B3:** from fork F, a beam with a shock strip runs back west beside S3 to two platforms. Return the same way. There is no portal.
   - **B5:** a loop south of S5 over zigzag stones, rejoining at K.
-- **Hazards that cover two routes:**
-  - **Junction P:** one shock field covers the whole junction. You cross it going down S2, into B2, and back out.
-  - **Sweepers XA and XB:** both cross the S3 sky beam and the B3 beam beside it. You meet each one three times: east on S3, then west and east on B3. While one beam is swept, the other is clear.
-  - **Junction K:** one shock field covers the junction where the B5 loop and the S5 main stretch meet.
+- **Shared hazards:** the sweeper crosses both the S3 sky beam and the B3 return beam. At junction K, one shock field covers the merge of the B5 loop and the S5 main path.
 - **Edges:** amber trim marks every jump lip and stepping stone. The main strands are at least seven cells apart across the void, or out of reach above, so no stretch of the main path can be skipped by jumping across. You can still hop into a branch early.
 - **Engine changes:** traps and movers take an optional trailing level in the level file, like doors and plates, so they can stand on raised floors. The spawn now stands on whatever is built at its spot.
 
-The map is generated by `tools/generate_corona_run.py`, which also writes `tests/corona_route.txt`. The generator lays the path like a turtle, one piece at a time, and records the bot's route as it goes. The pieces are: run, gap, hurdle, low bar, shock strip, sweeper, sliding block, tunnel, pillars, stones, shocked stones, zigzag beam and corner.
+The current layout is maintained in `assets/levels/corona_run.txt`. Its regression route is `tests/corona_route.txt`. Running the original `tools/generate_corona_run.py` overwrites both with the earlier generated layout and route.
 
-In CTest, `corona_run` checks the pieces: 10 cores, 4 checkpoints, 4 jump pads and no portals. It also checks falling and respawning, checkpoints, losing after five falls, lives and restarting.
+In CTest, `corona_run` checks the pieces: 9 cores, 7 checkpoints, 15 shock traps, 5 moving blocks, 4 jump pads and no portals. It also checks falling and respawning, checkpoints, losing after five falls, lives and restarting.
 
-A bot then finishes the whole run, every branch included, using only key presses. It runs, sprints and jumps at lips by itself, crouches under bars, waits for shock strips and sweepers, jumps sliding blocks on either axis, and rides pad chains. It finishes in about 141 s with no falls and no damage, so the 5:00 limit leaves little slack for a first attempt.
+A bot then finishes the whole run, every branch included, using only key presses. It sprints across gaps, delays its jump under the low beam, crouches under bars, times the hazards and rides the jump pads. It finishes in about 123 simulated seconds with no falls or damage.
 
 ## Helios Yard (four-region Lite layout)
 
 Choose **Level 1** on the title screen (or `--level 1`). Enter after a win moves through Tutorial Yard → Helios Yard → Corona Run. Its authored map is `assets/levels/helios_yard.txt`, in `LevelData` format. This Lite layout is maintained separately from the full edition: do not replace it with the full edition's map.
 
-The yard now contains **four regions and four cores**: the northwest roof, northeast shock floor, southwest layered maze and southeast corridor maze. The middle west maze, middle east stepping-stone trial and central core tower were removed. Removing 24 rows reduces the room from 84 × 84 to **84 × 60**, with a level cross-passage, a new four-cell-wide staircase to the northwest roof, and entry plates on the accessible side of their doors. Six blast doors and their six plates remain, including the central exit approach and elevated east shortcut. The portal pair, jump pad, hazards and final exit remain. All four cores unlock the final exit; the countdown remains 10:00.
+The yard now contains **four regions and four cores**: the northwest roof, northeast shock floor, southwest layered maze and southeast corridor maze. The middle west maze, middle east stepping-stone trial and central core tower were removed. Removing 24 rows reduces the room from 84 × 84 to **84 × 60**, with a cross-passage and raised stepping stones leading to the northwest core. Four blast doors and four ground-level pressure plates remain. One plate opens a raised door, and the two east-district plates sit on the approach side of their doors. The portal pair, jump pad, hazards and final exit remain. All four cores unlock the final exit; the countdown remains 10:00.
 
-`helios_four_core_route` plays from spawn through all four cores, the linked pressure plates and the final exit using movement, jump, crouch and interact inputs. It never warps the player or injects inventory/door state. The checked route finishes in about 101 simulated seconds without damage or falls; this is an automated route, not a first-time player's completion estimate.
+`helios_four_core_route` plays from spawn through all four cores, the linked pressure plates and the final exit using movement, jump, crouch and interact inputs. It never warps the player or injects inventory/door state. The checked route finishes in about 115 simulated seconds without damage or falls; this is an automated route, not a first-time player's completion estimate.
 
 **Random shock floor:** the big electric floor in the east room (the 31 plates between x 60–84 and z 14–30, around the core at 71.5, 26.5) no longer fires all at once on a fixed beat. Each of these plates has its own offset. In every 6-second slot its 1-second warning starts at a random moment between 0.5 and 2.5 seconds, followed by 2 seconds of shock. So the floor crackles in a shifting patchwork and you have to read the amber warnings to pick a way across. The warning always comes first, and at least 1 second of safe floor separates two shocks on the same plate. The schedule is a hash of the slot and the plate, so it is the same on every attempt. The other plates in Helios keep the fixed beat. In the level file, these plates end with `1 random` (the trailing level, then the word `random`).
 
@@ -104,7 +100,7 @@ Only what this map needs came across from the full edition:
 
 **Brighter sparks.** Every spark and light streak is drawn as a wider coloured streak with a white-hot core, a longer trail and a bigger, brighter halo. Debris chips are larger and glow hot as they fly. The emitters keep their particle counts but make bigger particles: impact sparks are hotter orange with pale-yellow ones mixed in. A hit also flashes warm light at the chest for a moment. The shock-plate arcs, their landing flashes and the warning embers are brighter too, and the ground dust is a little denser.
 
-Nothing else was synced: no checkpoints, pickups, crimson tiles, slides, wall actions, training, sounds, shadows or bloom. `lite_tests` also covers Helios Yard: the map's pieces and materials, a clear spawn, permanent door unlocks (ground and upper floor), portal linking and crossing, restart, shock damage and sprint. Captures: `CoreExplorerLite --play --level 1 --overview --frames 40 --capture overview.png`; `--warp x y z` starts the courier elsewhere.
+Nothing else was synced: no checkpoints, pickups, crimson tiles, slides, wall actions, training, sounds, shadows or bloom. `lite_tests` also covers Helios Yard: the map's pieces and materials, a clear spawn, permanent unlocks for ground-level and raised doors, portal linking and crossing, restart, shock damage and sprint. Captures: `CoreExplorerLite --play --level 1 --overview --frames 40 --capture overview.png`; `--warp x y z` starts the courier elsewhere.
 
 ## Coursework reference
 
@@ -112,7 +108,7 @@ The original assignment requirements are retained in [docs/ASSIGNMENT.md](docs/A
 
 ## Core collection tutorial
 
-The tutorial has three blue cores, Helios seven and Corona Run ten. Approach and press the interact key (E by default); collecting every core opens that yard's exit. Walk through the door to complete the level, then Enter selects the next map or R restarts. After Corona Run, the last level, the only option is Enter for the main menu. Filled HUD slots show collection progress. Pickup uses a short reach animation and a spark burst; the exit indicator turns green and the two panels slide apart. Reset clears collected cores and closes the gate.
+The tutorial has three blue cores, Helios has four, and Corona Run has nine. Approach and press the interact key (E by default); collecting every core opens that yard's exit. Walk through the door to complete the level, then Enter selects the next map or R restarts. After Corona Run, the last level, the only option is Enter for the main menu. Filled HUD slots show collection progress. Pickup uses a short reach animation and a spark burst; the exit indicator turns green and the two panels slide apart. Reset clears collected cores and closes the gate.
 
 ## Member-A / Member-B integration (2026-11-10)
 
