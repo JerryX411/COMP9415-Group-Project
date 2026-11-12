@@ -123,5 +123,5 @@ KeyBindings& keyBindings() {
   static KeyBindings bindings;
   return bindings;
 }
-std::filesystem::path settingsPath() { return std::filesystem::current_path() / "core_explorer_lite_keys.ini"; }
+std::filesystem::path settingsPath() { return std::filesystem::current_path() / "core_explorer_keys.ini"; }
 }  // namespace relay

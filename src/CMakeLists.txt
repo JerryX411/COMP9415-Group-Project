@@ -80,7 +80,7 @@ endif()
 
 # Keep the existing Pixi command (`build/Craft`) stable after adding src/.
 set_target_properties(Craft PROPERTIES
-    OUTPUT_NAME CoreExplorerLite
+    OUTPUT_NAME CoreExplorer
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}
 )
 
@@ -99,7 +99,7 @@ add_custom_target(craft_runtime_assets
 add_dependencies(Craft craft_runtime_assets)
 
 # Optional local authoring tools; source distributions work without this directory.
-option(BUILD_LITE_EDITOR "Build the local-only map authoring tool" OFF)
-if(BUILD_LITE_EDITOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/editor/CMakeLists.txt")
+option(BUILD_MAP_EDITOR "Build the local-only map authoring tool" OFF)
+if(BUILD_MAP_EDITOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/editor/CMakeLists.txt")
     add_subdirectory(editor)
 endif()

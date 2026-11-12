@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace relay {
-// An authored voxel level; Lite reads tutorial_showcase.txt and helios_yard.txt from assets/levels.
+// An authored voxel level;  reads tutorial_showcase.txt and helios_yard.txt from assets/levels.
 // Positions are floor coordinates (x, z); heights are fixed by each object type, except doors
 // and plates, which keep the level they stand on. The voxels
 // are `height` layers above the floor (y = 1..height, 3 to 16) inside the room, so a map can have

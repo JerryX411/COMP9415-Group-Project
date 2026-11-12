@@ -52,7 +52,7 @@ MenuAction drawMenu(MenuMode mode,int& level,float,bool){
  if(mode!=lastMode){selected=pause?0:std::clamp(level,0,2);lastMode=mode;}navigation(selected,count);
  const float top=size.y*.5F-(pause?235.F:250.F)*s;
  if(pause) d->AddRectFilled({0,0},size,IM_COL32(2,6,12,175));
- center(d,top+20*s,58*s,ink,pause?"Paused":"Core Explorer Lite");
+ center(d,top+20*s,58*s,ink,pause?"Paused":"Core Explorer");
  const char* titleLabels[]{"Tutorial","Level 1","Level 2","Settings","Quit"};
  const char* pauseLabels[]{"Resume","Restart","Settings","Main menu"};
  const char* const* labels=pause?pauseLabels:titleLabels;

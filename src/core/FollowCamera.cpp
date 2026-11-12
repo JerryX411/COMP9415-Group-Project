@@ -83,7 +83,7 @@ void FollowCamera::update(const Game& game,float dt) {
   if(surveillance_) { if(fixedRevision_!=game.revision())placeSurveillance(game); return; }
   const auto& a=game.player().motion;
   const bool lost=game.state()==RunState::Lost;
-  // Lite damage: one small ~0.14-second shake, without lens zoom or a dolly kick.
+  //  damage: one small ~0.14-second shake, without lens zoom or a dolly kick.
   // Cap rather than accumulate so simultaneous hazards cannot amplify it.
   if(a.hitAge<lastHitAge_&&a.hitAge<.1F) trauma_=std::max(trauma_,.25F);
   if(a.celebrateAge<lastCelebrate_&&a.celebrateAge<.2F) { trauma_+=.42F; fovVelocity_-=85.F; kickVelocity_.y+=2.6F; }

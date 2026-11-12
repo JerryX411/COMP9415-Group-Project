@@ -12,8 +12,8 @@
 #include <stdexcept>
 #include <filesystem>
 namespace craft::app {
-int runLiteBenchmark(int level,const std::string& output) {
- graphics::Window window(1920,1080,"Lite rendering benchmark | 60 warm-up + 240 measured frames");
+int runSceneBenchmark(int level,const std::string& output) {
+ graphics::Window window(1920,1080," rendering benchmark | 60 warm-up + 240 measured frames");
  window.setFramebufferSize(1920,1080);window.setVSync(false);
  relay::Game game;game.reset(level);game.warpPlayer(game.jumpPads()[0].position);
  for(int i=0;i<24;++i)game.update(1.F/120,{});

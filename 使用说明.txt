@@ -1,17 +1,12 @@
-﻿Core Explorer Lite — Windows 64 位离线编译包
+Core Explorer — 课程作业版
 
-1. 把整个 ZIP 全部解压到一个可写文件夹，推荐短英文路径，例如 E:\CoreExplorerLite。不要在压缩软件中直接运行。
-2. 想重新编译并运行：双击 BuildAndRun.cmd。等待编译完成后游戏会自动打开。
-3. 只想试玩：双击 Play.cmd。
-4. 修改游戏代码：编辑 src 文件夹内的代码，再双击 BuildAndRun.cmd。
-5. 编译完成的程序在 build/CoreExplorerLite.exe，旁边的 assets 必须保留。
+源码编译：安装 CMake、Git、C++17 编译器（MinGW 或 Visual Studio）、Python 3 和 Jinja2，并将工具加入 PATH。首次配置需要联网下载固定版本依赖。
+Windows：双击 BuildAndRun.cmd 编译、测试并启动。编译完成后可直接运行 build/CoreExplorer.exe（Visual Studio 为 build/Release/CoreExplorer.exe），不必每次重新编译。
+Linux / CSE：按照 README.md 的 CMake + Make 命令编译，运行 ./build/CoreExplorer。
+验证学校环境：bash tools/validate-cse.sh。
 
-不需要另外安装 CMake、MinGW、Python 或 VS Code，不需要联网下载依赖。
-需要 Windows 64 位以及支持 OpenGL 3.3 的显卡驱动。
-若编译失败，请保留窗口并发送错误文字。移动整个包后再次编译会自动备份旧 build 并重新配置。
+操作：WASD 移动，Shift 跑步，鼠标转镜头，空格跳跃，C 切换下蹲，E 拾取核心或操作机关，R 重开，Esc 暂停，V 切换全图摄像机，M 切换小地图。
+训练关收集 3 个核心，Level 1 收集 4 个，Level 2 收集 9 个；核心集齐后出口门开启，穿过出口通关。训练关时间无限。
+F1 诊断，F2 法线贴图开关，F3 法线分屏对比，F4 冻结，F5 法线强度，F6 隐藏面剔除对比。
 
-操作：WASD 移动，鼠标转镜头，空格跳跃，C 切换下蹲，E 拾取核心/操作机关，R 重开，Esc 暂停。
-集齐 3 个核心后门会打开，穿过出口通关，Enter 进入下一关。
-
-只包含 Lite 游戏；不包含高级版、地图编辑器和 Apex 音频素材。
-vendor 保存依赖及各自许可证；toolchain 是便携 w64devkit 工具目录，保留其许可证和来源文件。
+提交源码不包含下载的依赖、编译工具、编译缓存、可执行文件及独立地图编辑器。报告为根目录 Report.pdf，源码与测量证据在 report/。

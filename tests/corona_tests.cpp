@@ -1,6 +1,6 @@
-// Corona Run (Lite level 3): structure checks and a full run with ordinary controls, side branches
+// Corona Run ( level 3): structure checks and a full run with ordinary controls, side branches
 // (jump pad perch, stepping stones, the long beam, the loop) included.
-// The route in tests/corona_route.txt follows the authored Lite map.
+// The route in tests/corona_route.txt follows the authored  map.
 // The bot only presses keys: it runs, sprints, crouches and jumps at lips and steps on its own, and
 // waits for shock strips and sweeping blocks the way a careful player would. It must finish the
 // run without falling into the void, inside the time limit.

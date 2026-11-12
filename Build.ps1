@@ -5,7 +5,7 @@ try {
     if(-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
         throw 'CMake must be installed and available on PATH. See README.md.'
     }
-    $configure=@('-S','.', '-B',$BuildDirectory,'-DCMAKE_BUILD_TYPE=Release','-DBUILD_TESTING=ON','-DBUILD_LITE_EDITOR=OFF')
+    $configure=@('-S','.', '-B',$BuildDirectory,'-DCMAKE_BUILD_TYPE=Release','-DBUILD_TESTING=ON','-DBUILD_MAP_EDITOR=OFF')
     if(-not (Test-Path (Join-Path $BuildDirectory 'CMakeCache.txt'))) {
         if(Get-Command mingw32-make -ErrorAction SilentlyContinue) {$configure+=@('-G','MinGW Makefiles')}
     }

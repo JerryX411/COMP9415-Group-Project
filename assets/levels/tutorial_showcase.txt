@@ -1,4 +1,4 @@
-# Lite tutorial showcase: compact demonstration stations, no text teaching.
+#  tutorial showcase: compact demonstration stations, no text teaching.
 name Tutorial Yard
 message
 room 4 4 36 36

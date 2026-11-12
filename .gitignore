@@ -9,8 +9,8 @@ _deps/
 
 # Local-only standalone map editor (not part of the game submission).
 /src/editor/
-CoreExplorerLiteEditor.exe
-/OpenLiteEditor.cmd
+CoreExplorerEditor.exe
+/OpenMapEditor.cmd
 /.editor-backups/
 RelayEditor.exe
 /voxel_relay_keys.ini
@@ -19,8 +19,8 @@ RelayEditor.exe
 # Local audio extraction cache.
 /rsx_cache_db.bin
 
-/core_explorer_lite_keys.ini
-/CoreExplorerLite.exe
+/core_explorer_keys.ini
+/CoreExplorer.exe
 
 # Local render captures, not runtime game assets.
 /output/
@@ -32,3 +32,12 @@ RelayEditor.exe
 /build-backup-*/
 /.temp/
 /build-cse/
+
+/OpenMapEditor.cmd
+CoreExplorerEditor.exe
+/core_explorer_keys.ini
+/CoreExplorer.exe
+CoreExplorerLiteEditor.exe
+/OpenLiteEditor.cmd
+/core_explorer_lite_keys.ini
+/CoreExplorerLite.exe

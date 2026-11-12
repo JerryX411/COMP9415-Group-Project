@@ -38,7 +38,7 @@ int main(){try {
  relay::Game game;game.reset(0);
  check(!game.timedLevel()&&game.wordless()&&std::string(game.tutorialHint()).empty(),"Showcase must be unlimited and wordless");
  check(!game.traps().empty()&&!game.switches().empty()&&!game.movers().empty()&&!game.jumpPads().empty()&&
-       game.doors().size()==2&&game.plates().size()==2&&game.portals().size()==1,"Showcase must include all Lite mechanism types");
+       game.doors().size()==2&&game.plates().size()==2&&game.portals().size()==1,"Showcase must include all  mechanism types");
  wait(game,.2F);
  check(game.player().grounded&&!game.playerIntersectsScene(),"Clear showcase spawn");
 

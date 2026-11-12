@@ -7,12 +7,12 @@ if not exist "%TEMP%" mkdir "%TEMP%"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Build.ps1"
 if errorlevel 1 goto failed
 if /I "%~1"=="--build-only" exit /b 0
-if exist "%~dp0build\Release\CoreExplorerLite.exe" (
+if exist "%~dp0build\Release\CoreExplorer.exe" (
  cd /d "%~dp0build\Release"
- start "" "%~dp0build\Release\CoreExplorerLite.exe"
+ start "" "%~dp0build\Release\CoreExplorer.exe"
 ) else (
  cd /d "%~dp0build"
- start "" "%~dp0build\CoreExplorerLite.exe"
+ start "" "%~dp0build\CoreExplorer.exe"
 )
 exit /b 0
 :failed

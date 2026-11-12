@@ -42,8 +42,8 @@ int main(int argc,char** argv) {
    else if(arg=="--effect"&&i+1<argc)effect=argv[++i];
    else throw std::runtime_error("Unknown argument: "+arg);
   }
-  if(benchmark)return craft::app::runLiteBenchmark(level,benchmarkOutput);
-  craft::graphics::Window window(1440,900,"Core Explorer Lite | Standalone Edition");
+  if(benchmark)return craft::app::runSceneBenchmark(level,benchmarkOutput);
+  craft::graphics::Window window(1440,900,"Core Explorer | Standalone Edition");
   auto* native=window.nativeHandle(); relay::GameInput keys(native);
   craft::app::AppUi ui(window); relay::Game game; game.reset(level);
   if(!effect.empty()) {
@@ -192,7 +192,7 @@ int main(int argc,char** argv) {
    if(screen==Screen::Play)ui.drawDiagnostics(game,options,renderer,camera,frozen);
    ui.render();
    if(glGetError()!=GL_NO_ERROR) throw std::runtime_error("OpenGL error");
-   if(frames>0&&++count>=frames) {if(!capture.empty())relay::saveScreenshot(capture,w,h);std::cout<<"lite_smoke level="<<level<<" health="<<game.player().health<<" particles="<<game.liveParticleCount()<<" normal="<<options.normalMapping<<" intro=none gl_error=0\n";window.requestClose();}
+   if(frames>0&&++count>=frames) {if(!capture.empty())relay::saveScreenshot(capture,w,h);std::cout<<"game_smoke level="<<level<<" health="<<game.player().health<<" particles="<<game.liveParticleCount()<<" normal="<<options.normalMapping<<" intro=none gl_error=0\n";window.requestClose();}
    window.swapBuffers();
   }
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

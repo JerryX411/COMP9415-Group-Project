@@ -140,7 +140,7 @@ int main(){try{
   g.reset(level);check(g.collectedCount()==0&&!g.gateUnlocked()&&g.gateOpen()==0&&g.state()==relay::RunState::Playing,"Restart clears progress");
  }
  g.reset(0);g.warpPlayer({29.5F,2.5F,10});check(g.nearestCore()<0,"Core cannot be collected through the raised platform");
- // ---- Helios Yard (shortened Lite layout) ----
+ // ---- Helios Yard (shortened  layout) ----
  {
   relay::Game y; y.reset(relay::Game::heliosLevel);
   check(y.level()==relay::Game::heliosLevel&&std::string(y.levelName())=="HELIOS YARD","Helios Yard loads as level 2");
@@ -232,5 +232,5 @@ int main(){try{
   relay::Game t;t.reset(0);check(!t.livesLimited(),"Tutorial lives are unlimited");
   relay::Game o;o.reset(1);check(o.livesLimited()&&o.lives()==relay::Game::livesPerLevel,"Missions start with three lives");
  }
- std::cout<<"Lite: movement, jump/land, toggle/headroom/tunnel, interaction, shock timing/height/cooldown, moving collision and reset passed.\n";
+ std::cout<<": movement, jump/land, toggle/headroom/tunnel, interaction, shock timing/height/cooldown, moving collision and reset passed.\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;} }
